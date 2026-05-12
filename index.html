@@ -101,6 +101,7 @@
             <button class="segment" data-reminder-filter="week" type="button">7天内</button>
           </div>
         </div>
+        <div id="reminderSummary" class="reminder-summary"></div>
         <div id="reminderList" class="list"></div>
       </section>
 
@@ -167,31 +168,35 @@
       <section id="reports" class="view">
         <div class="section-head">
           <h3>数据报表</h3>
-          <p>收入分析、转化率、月度趋势一目了然</p>
+          <p>看客户质量、询盘阶段、订单金额和产品方向。</p>
         </div>
         <div class="report-grid">
-          <div class="report-card">
-            <h4>总营收 (USD)</h4>
+          <div class="report-card hero-metric">
+            <span>订单金额</span>
             <div class="big-num" id="reportRevenue">0</div>
-            <div class="trend" id="reportRevenueTrend"></div>
+            <p id="reportRevenueTrend">全部订单合计</p>
           </div>
           <div class="report-card">
-            <h4>本月订单数</h4>
+            <span>本月订单</span>
             <div class="big-num" id="reportMonthOrders">0</div>
-            <div class="trend" id="reportOrderTrend"></div>
+            <p class="trend" id="reportOrderTrend"></p>
           </div>
           <div class="report-card">
-            <h4>询盘转化率</h4>
+            <span>询盘转化</span>
             <div class="big-num" id="reportConversion">0%</div>
-            <div class="trend" id="reportConvTrend"></div>
+            <p class="trend" id="reportConvTrend">成交询盘 / 总询盘</p>
           </div>
           <div class="report-card report-full">
-            <h4>销售漏斗</h4>
-            <div id="funnelChart" class="bar-chart"></div>
+            <div class="report-title"><h4>询盘阶段漏斗</h4><span>看卡在哪一步</span></div>
+            <div id="funnelChart" class="bar-chart report-bars"></div>
           </div>
-          <div class="report-card report-full">
-            <h4>月度营收趋势</h4>
-            <div id="monthlyRevenueChart" class="bar-chart"></div>
+          <div class="report-card report-half">
+            <div class="report-title"><h4>月度订单趋势</h4><span>最近 6 个月</span></div>
+            <div id="monthlyRevenueChart" class="bar-chart report-bars"></div>
+          </div>
+          <div class="report-card report-half">
+            <div class="report-title"><h4>来源表现</h4><span>询盘从哪里来</span></div>
+            <div id="sourceChart" class="bar-chart report-bars"></div>
           </div>
         </div>
       </section>
@@ -252,8 +257,7 @@
     </dialog>
     <div id="_err" style="position:fixed;bottom:0;left:0;right:0;background:#e74c3c;color:#fff;padding:8px 12px;font-size:12px;z-index:99999;display:none;font-family:monospace;max-height:120px;overflow-y:auto;"></div><script>window.onerror=function(m,s,l,c,e){var d=document.getElementById("_err");if(d){d.style.display="block";d.innerHTML+="ERROR: "+m+" (line "+l+")<br>";}};</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./product-data.js?v=20260512-fix1"></script>
-    <script src="./app.js?v=20260512-auth2"></script>
-<button class="quick-follow-btn" id="quickFollowBtn" type="button" title="快速添加跟进">+</button>
+    <script src="./app.js?v=20260512-reminder1"></script>
 <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-label="菜单">☰</button>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 </body>

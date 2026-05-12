@@ -15,6 +15,22 @@ if (!window.crypto || !window.crypto.randomUUID) {
 const SOURCES = ["FACEBOOK", "国际站", "独立站", "社媒私信", "展会现场", "老客户转介绍"];
 const PRODUCT_CATEGORIES = ["IH电磁饭煲", "保温桶", "电饭煲电脑", "电饭煲机械", "煮粥锅", "电压力锅"];
 const STAGES = ["信息已收集", "已联系未回复", "已回复", "需求确认", "待推荐", "已推荐", "待报价", "已报价", "样品中", "谈判中", "已成交", "暂缓", "无效"];
+const CLOSED_STAGES = ["已成交", "无效", "暂缓", "取消", "已完成"];
+const FOLLOW_PLAN_DAYS = {
+  "终端客户": 5,
+  "批发商": 2,
+  "代理商": 2,
+  "贸易商": 3,
+  "项目客户": 1,
+  "其他": 3,
+};
+const LEVEL_PLAN_DAYS = {
+  "A-重点客户": 1,
+  "B-潜力客户": 2,
+  "C-普通客户": 4,
+  "D-低优先级": 7,
+  "VIP-老客户": 14,
+};
 const CUSTOMER_KINDS = ["公司", "个人"];
 const CUSTOMER_NATURES = ["终端客户", "批发商", "代理商", "贸易商", "项目客户", "其他"];
 const CONTACT_TYPES = ["WhatsApp", "微信", "电话", "邮箱", "Facebook", "Instagram", "其他"];
@@ -406,6 +422,12 @@ function formatISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function addDays(isoDate, days) {
+  const base = isoDate ? new Date(`${isoDate}T00:00:00`) : new Date();
+  base.setDate(base.getDate() + Number(days || 0));
+  return formatISO(base);
+}
+
 function dateCode(isoDate) {
   const date = typeof isoDate === "string" ? new Date(`${isoDate}T00:00:00`) : isoDate;
   return `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
@@ -490,39 +512,99 @@ function drawBars(id, rows) {
 function getReminders() {
   const reminders = [];
   state.customers.forEach((item) => {
-    const delta = daysUntil(item.nextFollow);
-    if (item.nextFollow && delta <= 3 && !["已成交", "无效", "暂缓"].includes(item.stage)) {
-      reminders.push({ recordType: "customer", recordId: item.id, type: "客户跟进", date: item.nextFollow, status: item.stage, customerName: item.name, phone: primaryContact(item), product: text(item.productCategories), action: item.nextAction || "继续跟进客户", context: item.notes, delta });
+    if (CLOSED_STAGES.includes(item.stage)) return;
+    const plan = plannedReminder(item, "customer");
+    const delta = daysUntil(plan.date);
+    if (plan.date && delta <= 7) {
+      reminders.push({ recordType: "customer", recordId: item.id, type: "客户跟进", date: plan.date, status: item.stage || item.nature || "未分阶段", customerName: item.name, phone: primaryContact(item), product: text(item.productCategories), action: plan.action, context: plan.reason, delta, auto: plan.auto });
     }
   });
   state.inquiries.forEach((item) => {
-    const delta = daysUntil(item.nextFollow);
-    if (item.nextFollow && delta <= 3 && !["已成交", "无效"].includes(item.stage)) {
-      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: item.nextFollow, status: item.stage, customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: item.sendContent || (latestFollow(item) != null ? latestFollow(item).sendContent : undefined) || item.need || "继续跟进询盘", context: (latestFollow(item) != null ? latestFollow(item).content : undefined) || item.notes, delta });
+    if (CLOSED_STAGES.includes(item.stage)) return;
+    const plan = plannedReminder(item, "inquiry");
+    const delta = daysUntil(plan.date);
+    if (plan.date && delta <= 7) {
+      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: plan.date, status: item.stage || "新询盘", customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: plan.action, context: plan.reason, delta, auto: plan.auto });
     }
   });
   state.orders.forEach((item) => {
     const delta = daysUntil(item.deliveryDate);
-    if (item.deliveryDate && delta <= 7 && !["已完成", "取消"].includes(item.status)) {
+    if (item.deliveryDate && delta <= 7 && !CLOSED_STAGES.includes(item.status)) {
       reminders.push({ recordType: "order", recordId: item.id, type: "订单交期", date: item.deliveryDate, status: item.status, customerName: item.customerName, phone: primaryContact(item), product: orderProducts(item), action: "确认生产/出货/收款进度", context: item.notes, delta });
     }
   });
   return reminders.sort((a, b) => a.delta - b.delta);
 }
 
+function plannedReminder(item, kind) {
+  const manual = item.nextFollow;
+  if (manual) {
+    return {
+      date: manual,
+      auto: false,
+      reason: latestContext(item) || "已手动设置下次跟进日期。",
+      action: item.nextAction || item.sendContent || (latestFollow(item) ? latestFollow(item).sendContent : "") || defaultFollowAction(item, kind),
+    };
+  }
+  const baseDate = kind === "customer" ? item.firstContact : item.date;
+  if (!baseDate) return { date: "", auto: true, reason: "还没有日期，无法自动安排。", action: defaultFollowAction(item, kind) };
+  const days = reminderDays(item);
+  return {
+    date: addDays(baseDate, days),
+    auto: true,
+    reason: `${kind === "customer" ? "首次接触" : "询盘"}后按「${item.nature || item.level || "默认"}」自动安排 ${days} 天后跟进。`,
+    action: defaultFollowAction(item, kind),
+  };
+}
+
+function reminderDays(item) {
+  const byLevel = LEVEL_PLAN_DAYS[item.level];
+  const byNature = FOLLOW_PLAN_DAYS[item.nature];
+  const base = Math.min(byLevel || 99, byNature || 99);
+  return base === 99 ? 3 : base;
+}
+
+function latestContext(item) {
+  return (latestFollow(item) && latestFollow(item).content) || item.latestFollowText || item.notes || item.need || "";
+}
+
+function defaultFollowAction(item, kind) {
+  const product = text(item.productCategories) || text(item.productModels) || "对应产品";
+  if (kind === "customer" && (!item.stage || item.stage === "信息已收集" || item.stage === "已联系未回复")) return `发一条简短问候，确认是否需要${product}资料/报价。`;
+  if (item.stage === "待推荐") return `根据客户需求推荐${product}型号，并附核心卖点。`;
+  if (item.stage === "待报价" || item.stage === "需求确认") return "确认数量、目的港、插头/电压、包装后准备报价。";
+  if (item.stage === "已报价") return "追问报价反馈，可补充交期、付款方式和热销型号。";
+  if (item.stage === "样品中") return "确认样品是否收到，记录测试反馈。";
+  if (item.stage === "谈判中") return "跟进价格、付款、交期三个关键点，推进确认PI。";
+  return `继续跟进客户需求，准备${product}资料。`;
+}
+
 function renderReminders() {
   const list = document.getElementById("reminderList");
   let rows = getReminders().filter((item) => reminderFilter === "today" ? item.delta === 0 : reminderFilter === "overdue" ? item.delta < 0 : reminderFilter === "week" ? item.delta <= 7 : true);
+  renderReminderSummary(rows);
   if (!rows.length) return list.innerHTML = `<div class="empty">今天暂时没有提醒。</div>`;
   list.innerHTML = rows.map((item) => {
     const tone = item.delta < 0 ? "red" : item.delta === 0 ? "amber" : "green";
     const label = item.delta < 0 ? `逾期 ${Math.abs(item.delta)} 天` : item.delta === 0 ? "今天" : `${item.delta} 天后`;
     return `<article class="reminder clickable" data-detail-type="${item.recordType}" data-detail-id="${item.recordId}">
-      <div><span class="tag ${tone}">${label}</span><p>${item.date}</p></div>
-      <div><h4>${escapeHtml(item.customerName)} · ${escapeHtml(item.type)}</h4><p><strong>要做：</strong>${escapeHtml(item.action)}</p><p><strong>最近：</strong>${escapeHtml(item.context || "")}</p><p>${escapeHtml(item.phone)} · ${escapeHtml(item.product)}</p></div>
-      <div><span class="tag">${escapeHtml(item.status)}</span><p>点开查看</p></div>
+      <div><span class="tag ${tone}">${label}</span><p>${item.date}</p>${item.auto ? '<span class="tag soft">自动计划</span>' : ''}</div>
+      <div><h4>${escapeHtml(item.customerName)} · ${escapeHtml(item.type)}</h4><p><strong>建议：</strong>${escapeHtml(item.action)}</p><p><strong>原因：</strong>${escapeHtml(item.context || "")}</p><p>${escapeHtml(item.phone)} · ${escapeHtml(item.product)}</p></div>
+      <div class="reminder-actions"><span class="tag">${escapeHtml(item.status || "")}</span><button class="row-btn" data-edit-type="${item.recordType}" data-edit-id="${item.recordId}" type="button">编辑跟进</button></div>
     </article>`;
   }).join("");
+}
+
+function renderReminderSummary(rows) {
+  const box = document.getElementById("reminderSummary");
+  if (!box) return;
+  const overdue = rows.filter((x) => x.delta < 0).length;
+  const today = rows.filter((x) => x.delta === 0).length;
+  const auto = rows.filter((x) => x.auto).length;
+  box.innerHTML = `<div class="reminder-summary-card urgent"><span>逾期</span><strong>${overdue}</strong></div>
+    <div class="reminder-summary-card today"><span>今天要回</span><strong>${today}</strong></div>
+    <div class="reminder-summary-card auto"><span>自动计划</span><strong>${auto}</strong></div>
+    <div class="reminder-summary-text">提醒会同时看客户和询盘：优先用你填的“下次跟进”，没填就按客户性质/等级自动排期。</div>`;
 }
 
 function renderCustomers() {
@@ -906,6 +988,14 @@ function bindFormHelpers() {
   }));
   (document.getElementById("addContactBtn") != null ? document.getElementById("addContactBtn").addEventListener("click", () => document.getElementById("addContactBtn").insertAdjacentHTML("beforebegin", contactRowHtml())) : undefined);
   (document.getElementById("addOrderItemBtn") != null ? document.getElementById("addOrderItemBtn").addEventListener("click", () => document.getElementById("addOrderItemBtn").insertAdjacentHTML("beforebegin", orderItemRowHtml())) : undefined);
+  ["firstContactInput", "dateInput", "nextFollowInput", "piDateInput", "deliveryInput"].forEach((name) => {
+    const input = document.querySelector(`[name="${name}"]`);
+    if (!input) return;
+    input.addEventListener("blur", () => {
+      const iso = toISO(input.value);
+      if (iso) input.value = iso;
+    });
+  });
 }
 
 function bindKindVisibility() {
@@ -981,14 +1071,18 @@ function saveForm(e) {
 function normalizeRecord(type, data) {
   if (type === "customer") {
     data.firstContact = toISO(data.firstContactInput);
+    data.firstContactInput = data.firstContact || data.firstContactInput;
     data.nextFollow = toISO(data.nextFollowInput);
+    if (data.nextFollow) data.nextFollowInput = data.nextFollow;
     data.phone = primaryContact(data);
     data.email ||= contactByType(data, "邮箱");
     data.name ||= data.companyName || data.personName;
   }
   if (type === "inquiry") {
     data.date = toISO(data.dateInput) || formatISO(new Date());
+    data.dateInput = data.date;
     data.nextFollow = toISO(data.nextFollowInput);
+    if (data.nextFollow) data.nextFollowInput = data.nextFollow;
     data.stage ||= "新询盘";
     data.phone = primaryContact(data);
     data.email ||= contactByType(data, "邮箱");
@@ -1310,6 +1404,8 @@ function renderReports() {
   // Total revenue
   const totalRevenue = orders.reduce((sum, o) => sum + orderTotal(o), 0);
   document.getElementById('reportRevenue').textContent = money(totalRevenue, '');
+  const revenueTrend = document.getElementById('reportRevenueTrend');
+  if (revenueTrend) revenueTrend.textContent = `${orders.length} 个订单合计`;
   
   // This month orders
   const monthOrders = orders.filter(o => {
@@ -1353,6 +1449,8 @@ function renderReports() {
     if (monthlyData[key] !== undefined) monthlyData[key] += orderTotal(o);
   });
   drawBars('monthlyRevenueChart', Object.entries(monthlyData));
+  const sourceData = countBy(inquiries, (item) => item.source);
+  drawBars('sourceChart', sourceData);
 }
 
 /* ===== BULK OPERATIONS ===== */

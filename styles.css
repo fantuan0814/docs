@@ -476,6 +476,44 @@ textarea:focus {
   gap: 8px;
 }
 
+.reminder-summary {
+  display: grid;
+  grid-template-columns: 120px 120px 120px minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.reminder-summary-card,
+.reminder-summary-text {
+  background: rgba(255, 250, 243, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.reminder-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reminder-summary-card strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.reminder-summary-card.urgent strong { color: var(--red); }
+.reminder-summary-card.today strong { color: var(--amber); }
+.reminder-summary-card.auto strong { color: var(--accent); }
+
+.reminder-summary-text {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  line-height: 1.5;
+}
+
 .reminder {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -524,6 +562,12 @@ textarea:focus {
   color: var(--green);
 }
 
+.tag.soft {
+  margin-top: 6px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--muted);
+}
+
 .reminder h4 {
   margin: 0 0 3px;
   font-size: 14px;
@@ -536,6 +580,12 @@ textarea:focus {
 
 .reminder strong {
   color: var(--text);
+}
+
+.reminder-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
 }
 
 .table-wrap {
@@ -1005,8 +1055,20 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .reminder-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .reminder-summary-text {
+    grid-column: 1 / -1;
+  }
+
   .reminder {
     grid-template-columns: 1fr;
+  }
+
+  .reminder-actions {
+    justify-items: start;
   }
 
   .form-grid {
@@ -1085,22 +1147,39 @@ textarea {
 /* ===== REPORTS / ANALYTICS ===== */
 .report-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 14px;
 }
 .report-card {
-  background: var(--panel);
+  background: rgba(255, 250, 243, 0.92);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 16px;
+  padding: 16px;
   box-shadow: var(--shadow);
+  grid-column: span 2;
 }
-.report-card h4 { margin: 0 0 8px; font-size: 14px; }
-.report-card .big-num { font-size: 32px; font-weight: 700; color: var(--accent); }
+.report-card span { color: var(--muted); font-size: 12px; }
+.report-card h4 { margin: 0; font-size: 14px; }
+.report-card .big-num { font-size: 30px; font-weight: 800; color: var(--accent-dark); margin: 6px 0 4px; }
+.report-card p { margin: 0; color: var(--muted); }
 .report-card .trend { font-size: 12px; color: var(--green); }
 .report-card .trend.down { color: var(--red); }
-.report-full { grid-column: 1 / -1; }
+.hero-metric {
+  background: linear-gradient(135deg, rgba(255, 246, 234, 0.96), rgba(255, 232, 213, 0.94));
+}
+.report-full { grid-column: span 6; }
+.report-half { grid-column: span 3; }
+.report-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.report-bars .bar-row {
+  grid-template-columns: 130px minmax(0, 1fr) 48px;
+}
 .conversion-bar {
   display: flex;
   height: 24px;
@@ -1273,6 +1352,9 @@ th.sortable.desc::after { content: ' ↓'; opacity: 1; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .charts-grid { grid-template-columns: 1fr; }
   .report-grid { grid-template-columns: 1fr; }
+  .report-card,
+  .report-full,
+  .report-half { grid-column: 1 / -1; }
   .kanban-board {
     grid-template-columns: 1fr;
     max-height: 70vh;
@@ -1290,6 +1372,7 @@ th.sortable.desc::after { content: ' ↓'; opacity: 1; }
   .field.wide { grid-column: span 1; }
   .dialog-actions { flex-wrap: wrap; }
   .reminder { grid-template-columns: 1fr; }
+  .reminder-summary { grid-template-columns: 1fr 1fr; }
   .quick-follow-btn { bottom: 16px; right: 16px; width: 46px; height: 46px; font-size: 20px; }
   .merge-selector { grid-template-columns: 1fr; }
   .date-range-filter { flex-direction: column; align-items: flex-start; }
