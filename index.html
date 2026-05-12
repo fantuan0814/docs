@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gavin CRM</title>
+    <link rel="stylesheet" href="./styles.css?v=20260512-gavin1" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div>
+          <h1>Gavin CRM</h1>
+          <p>客户、询盘、PI 和报价</p>
+        </div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-btn active" data-view="dashboard">提醒</button>
+        <button class="nav-btn" data-view="customers">客户</button>
+        <button class="nav-btn" data-view="inquiries">询盘中心</button>
+        <button class="nav-btn" data-view="orders">订单</button>
+        <button class="nav-btn" data-view="products">产品</button>
+      </nav>
+      <div class="side-tools">
+        <button id="exportBtn" class="ghost-btn" type="button">导出数据</button>
+        <label class="ghost-btn file-btn">
+          导入数据
+          <input id="importInput" type="file" accept="application/json" />
+        </label>
+      </div>
+    </aside>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h2 id="viewTitle">今日提醒</h2>
+          <p id="viewSubtitle">打开后先看这里，知道今天要回谁、发什么。</p>
+        </div>
+        <div class="top-actions">
+          <div id="cloudStatus" class="cloud-status">本地模式</div>
+          <input id="emailLoginInput" class="login-input" type="email" placeholder="输入邮箱登录" />
+          <button id="loginBtn" class="ghost-btn" type="button">发送登录链接</button>
+          <button id="logoutBtn" class="ghost-btn hidden" type="button">退出</button>
+          <button id="quickAddBtn" class="primary-btn" type="button">新增客户</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active-view">
+        <div class="stats-grid">
+          <article class="stat">
+            <span>待跟进</span>
+            <strong id="statDue">0</strong>
+          </article>
+          <article class="stat">
+            <span>客户总数</span>
+            <strong id="statCustomers">0</strong>
+          </article>
+          <article class="stat">
+            <span>询盘总数</span>
+            <strong id="statInquiries">0</strong>
+          </article>
+          <article class="stat">
+            <span>订单总数</span>
+            <strong id="statOrders">0</strong>
+          </article>
+        </div>
+        <div class="charts-grid">
+          <article class="chart-panel">
+            <div class="section-head compact"><h3>国家分布</h3></div>
+            <div id="countryChart" class="bar-chart"></div>
+          </article>
+          <article class="chart-panel">
+            <div class="section-head compact"><h3>产品需求</h3></div>
+            <div id="productChart" class="bar-chart"></div>
+          </article>
+        </div>
+        <div class="section-head">
+          <h3>跟进提醒</h3>
+          <div class="segmented" role="tablist" aria-label="提醒筛选">
+            <button class="segment active" data-reminder-filter="all" type="button">全部</button>
+            <button class="segment" data-reminder-filter="today" type="button">今天</button>
+            <button class="segment" data-reminder-filter="overdue" type="button">逾期</button>
+            <button class="segment" data-reminder-filter="week" type="button">7天内</button>
+          </div>
+        </div>
+        <div id="reminderList" class="list"></div>
+      </section>
+
+      <section id="customers" class="view">
+        <div class="toolbar">
+          <input id="customerSearch" class="search" type="search" placeholder="搜索客户、电话、产品、来源" />
+        </div>
+        <div id="customerList" class="table-wrap"></div>
+      </section>
+
+      <section id="inquiries" class="view">
+        <div class="filter-panel">
+          <div class="filter-row">
+            <select id="inquiryStageFilter" class="search small-select"></select>
+            <select id="inquirySourceFilter" class="search small-select"></select>
+            <select id="inquiryProductFilter" class="search small-select"></select>
+            <button class="ghost-btn" id="clearInquiryFilters" type="button">清空筛选</button>
+          </div>
+          <div id="inquirySummary" class="mini-grid"></div>
+        </div>
+        <div class="toolbar">
+          <input id="inquirySearch" class="search" type="search" placeholder="搜索询盘、客户、需求、来源" />
+        </div>
+        <div id="inquiryFocus" class="focus-panel"></div>
+        <div id="inquiryList" class="table-wrap"></div>
+      </section>
+
+      <section id="followups" class="view">
+        <div class="toolbar">
+          <input id="followSearch" class="search" type="search" placeholder="搜索沟通内容、客户、要发内容" />
+        </div>
+        <div id="followList" class="table-wrap"></div>
+      </section>
+
+      <section id="orders" class="view">
+        <div class="toolbar">
+          <input id="orderSearch" class="search" type="search" placeholder="搜索订单、客户、产品" />
+        </div>
+        <div id="piPreview" class="pi-preview"></div>
+        <div id="orderList" class="table-wrap"></div>
+      </section>
+
+      <section id="products" class="view">
+        <div class="filter-panel">
+          <div class="section-head compact"><h3>FOB / CFR 价格计算器</h3></div>
+          <div id="fobCalculator" class="calc-grid"></div>
+          <div id="fobResult" class="calc-result"></div>
+        </div>
+        <div class="toolbar">
+          <input id="productSearch" class="search" type="search" placeholder="搜索产品名称、型号、参数、价格" />
+          <select id="productCategoryFilter" class="search small-select" aria-label="产品大类筛选"></select>
+        </div>
+        <div id="productList" class="table-wrap"></div>
+      </section>
+    </main>
+
+    <dialog id="formDialog">
+      <form id="recordForm" method="dialog">
+        <div class="dialog-head">
+          <h3 id="dialogTitle">新增</h3>
+          <button class="icon-btn" id="closeDialogBtn" type="button" aria-label="关闭">×</button>
+        </div>
+        <div id="formFields" class="form-grid"></div>
+        <footer class="dialog-actions">
+          <button class="ghost-btn" type="button" id="cancelBtn">取消</button>
+          <button class="primary-btn" type="submit">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="detailDialog">
+      <div class="detail-box">
+        <div class="dialog-head">
+          <h3 id="detailTitle">详情</h3>
+          <button class="icon-btn" id="closeDetailBtn" type="button" aria-label="关闭">×</button>
+        </div>
+        <div id="detailBody" class="detail-body"></div>
+        <footer class="dialog-actions">
+          <button class="ghost-btn" type="button" id="detailEditBtn">编辑</button>
+          <button class="primary-btn" type="button" id="detailDoneBtn">知道了</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./product-data.js?v=20260512-2"></script>
+    <script src="./app.js?v=20260512-gavin2"></script>
+  </body>
+</html>
