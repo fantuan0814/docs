@@ -1135,7 +1135,8 @@ function contactByType(item, type) {
 }
 
 function latestFollow(item) {
-  return (item.follows || [])[item.follows.length - 1];
+  const follows = item.follows || [];
+  return follows[follows.length - 1];
 }
 
 function findRecord(type, id) {
