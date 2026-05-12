@@ -1,3 +1,17 @@
+// Polyfill for older browsers
+if (!window.crypto || !window.crypto.randomUUID) {
+  (function() {
+    function _uuid() {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    if (!window.crypto) window.crypto = {};
+    if (!window.crypto.randomUUID) window.crypto.randomUUID = _uuid;
+  })();
+}
+
 const SOURCES = ["FACEBOOK", "国际站", "独立站", "社媒私信", "展会现场", "老客户转介绍"];
 const PRODUCT_CATEGORIES = ["IH电磁饭煲", "保温桶", "电饭煲电脑", "电饭煲机械", "煮粥锅", "电压力锅"];
 const STAGES = ["信息已收集", "已联系未回复", "已回复", "需求确认", "待推荐", "已推荐", "待报价", "已报价", "样品中", "谈判中", "已成交", "暂缓", "无效"];
@@ -12,7 +26,7 @@ const STORAGE_KEY = "cyc-crm-local-v4";
 const PRODUCT_PARAMS = window.PRODUCT_PARAMS || [];
 const SUPABASE_URL = "https://etghiirstnptnpbnnemb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_immE4TvFk9dwoba01_B4sA_xUxR2w57";
-const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = (window.supabase != null ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : undefined);
 let currentUser = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
@@ -76,9 +90,14 @@ let currentView = "dashboard";
 let reminderFilter = "all";
 let editing = { type: null, id: null };
 let detailTarget = null;
-let activeInquiryId = state.inquiries[0]?.id || null;
-let activeOrderId = state.orders[0]?.id || null;
+let activeInquiryId = (state.inquiries[0] != null ? state.inquiries[0].id : undefined) || null;
+let activeOrderId = (state.orders[0] != null ? state.orders[0].id : undefined) || null;
 let undoStack = [];
+let bulkSelected = new Set();
+let sortState = { field: null, dir: 'asc' };
+let mergeSourceId = null;
+let mergeTargetId = null;
+let theme = localStorage.getItem('cyc-crm-theme') || 'light';
 
 const viewMeta = {
   dashboard: ["今日小提醒", "点开提醒卡片可查看详情和编辑。", "新增客户"],
@@ -86,6 +105,8 @@ const viewMeta = {
   inquiries: ["询盘中心", "询盘和跟进合在一起，看分类、看阶段、看时间线。", "新增询盘"],
   followups: ["询盘中心", "跟进已经合并到询盘里。", "新增询盘"],
   orders: ["订单 PI", "录入订单后，右侧可直接预览 PI。", "新增订单"],
+  kanban: ["询盘看板", "拖拽卡片切换阶段，查看销售漏斗。", "新增询盘"],
+  reports: ["数据报表", "收入、转化率、月度趋势分析。", "新增询盘"],
   products: ["产品小库", "随时查型号、分类和价格。", "新增询盘"],
 };
 
@@ -156,6 +177,15 @@ function productModels() {
   return PRODUCT_CATALOG.map((item) => `${item.category} / ${item.model}`);
 }
 
+// Handle ?fresh=password1 to reset demo data
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('fresh') === 'password1') {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('cyc-crm-theme');
+  }
+})();
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
@@ -192,8 +222,18 @@ function loadState() {
       chatImages: [],
       profileImages: [],
     }],
-    inquiries: [],
-    orders: [],
+    inquiries: [
+      { id: 'INQ-20260508-001', date: '2026-05-08', customerName: '示例客户A', customerKind: '公司', companyName: '示例客户A', personName: 'Tom', position: '采购', contacts: [{type:'WhatsApp',value:'+00 0000'},{type:'邮箱',value:'tom@example.com'}], country: '美国', nature: '批发商', source: 'FACEBOOK', stage: '已报价', level: 'B-潜力客户', productCategories: ['电饭煲电脑'], productModels: ['21L电饭煲电脑'], need: '需要21L电饭煲电脑500台，FOB价格', latestFollowText: '已发送FOB报价单，客户正在内部评估', sendContent: '21L电饭煲电脑 FOB USD 565.80/台，MOQ 200台', nextFollowInput: '5.15', nextFollow: '2026-05-15', notes: '价格敏感，可能需要调整', follows: [{id:'f1',date:'2026-05-08',content:'首次询盘，需要电饭煲电脑',sendContent:'',nextFollow:'2026-05-10'},{id:'f2',date:'2026-05-10',content:'已发送报价，客户要求降价',sendContent:'调整报价',nextFollow:'2026-05-15'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260509-001', date: '2026-05-09', customerName: 'ABC Electronics', customerKind: '公司', companyName: 'ABC Electronics Ltd.', personName: 'Sarah', position: 'CEO', contacts: [{type:'WhatsApp',value:'+1 234 5678'},{type:'邮箱',value:'sarah@abc.com'}], country: '英国', nature: '代理商', source: '国际站', stage: '样品中', level: 'A-重点客户', productCategories: ['电压力锅'], productModels: ['35L'], need: '35L电压力锅年采购量2000台，需要样品测试', latestFollowText: '样品已寄出，等待客户收到后反馈', sendContent: '样品单号：DHL 1234567890', nextFollowInput: '5.14', nextFollow: '2026-05-14', notes: '大客户潜力，跟进服务质量', follows: [{id:'f3',date:'2026-05-09',content:'国际站询盘，要求寄样',sendContent:'确认样品规格',nextFollow:'2026-05-12'},{id:'f4',date:'2026-05-12',content:'样品已发出，等待收货',sendContent:'发送物流单号',nextFollow:'2026-05-14'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260510-001', date: '2026-05-10', customerName: 'Dubai Trading Co.', customerKind: '公司', companyName: 'Dubai Trading Co. LLC', personName: 'Ahmed', position: '采购经理', contacts: [{type:'WhatsApp',value:'+971 50 1234'}], country: '阿联酋', nature: '贸易商', source: '社媒私信', stage: '谈判中', level: 'A-重点客户', productCategories: ['IH电磁饭煲','电饭煲电脑'], productModels: ['21L IH','25L电饭煲电脑'], need: 'IH电磁饭煲和电饭煲电脑各1000台，迪拜市场', latestFollowText: '价格已确认，正在谈付款方式', sendContent: '30%定金+70%发货前付清', nextFollowInput: '5.13', nextFollow: '2026-05-13', notes: '付款条件可能要求LC', follows: [{id:'f5',date:'2026-05-10',content:'社媒联系，需求明确',sendContent:'初步报价',nextFollow:'2026-05-11'},{id:'f6',date:'2026-05-11',content:'客户对价格满意，讨论付款',sendContent:'付款方式方案',nextFollow:'2026-05-13'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260511-001', date: '2026-05-11', customerName: 'Juan Carlos', customerKind: '个人', companyName: '', personName: 'Juan Carlos', position: '', contacts: [{type:'WhatsApp',value:'+52 1 5555'}], country: '墨西哥', nature: '终端客户', source: 'FACEBOOK', stage: '已联系未回复', level: 'C-普通客户', productCategories: ['煮粥锅'], productModels: ['23L'], need: '23L煮粥锅300台，本地餐厅使用', latestFollowText: '已发送产品资料，等待回复', sendContent: '23L煮粥锅 FOB USD 584.25/台', nextFollowInput: '5.14', nextFollow: '2026-05-14', notes: '', follows: [{id:'f7',date:'2026-05-11',content:'Facebook广告咨询',sendContent:'产品目录和价格',nextFollow:'2026-05-14'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260512-001', date: '2026-05-12', customerName: 'Kenya Suppliers', customerKind: '公司', companyName: 'Kenya Suppliers Ltd.', personName: 'Mwangi', position: 'Director', contacts: [{type:'WhatsApp',value:'+254 700 111'}], country: '肯尼亚', nature: '批发商', source: '展会现场', stage: '需求确认', level: 'B-潜力客户', productCategories: ['保温桶','电压力锅'], productModels: ['50L保温桶','60L'], need: '保温桶和电压力锅，东非市场批发', latestFollowText: '展会认识的客户，正在确认具体型号数量', sendContent: '50L保温桶 USD 699/台，60L电压力锅 USD 2180/台', nextFollowInput: '5.16', nextFollow: '2026-05-16', notes: '广交会客户，印象不错', follows: [{id:'f8',date:'2026-05-12',content:'展会现场交换名片，初步沟通需求',sendContent:'公司介绍和产品目录',nextFollow:'2026-05-16'}], chatImages: [], profileImages: [] },
+    ],
+    orders: [
+      { id: 'ORD-20260508-001', piDate: '2026-05-08', piNo: 'FJ26158', customerName: 'Lagos Imports', customerInfo: 'Lagos Imports Nigeria Ltd.\n12 Marina Road, Lagos, Nigeria', contacts: [{type:'WhatsApp',value:'+234 800 2222'},{type:'邮箱',value:'info@lagosimports.com'}], portLoading: 'GUANGZHOU, CHINA', portDischarge: 'APAPA, LAGOS, NIGERIA', orderItems: [{model:'21L电饭煲电脑',qty:500,price:565.80,amount:282900},{model:'35L',qty:200,price:1180,amount:236000}], freight: 8500, container: '2x40HQ', currency: 'USD', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'NIGERIA', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-30', status: '生产中', payStatus: '已收定金', notes: '老客户返单，质量稳定', chatImages: [], profileImages: [] },
+      { id: 'ORD-20260510-001', piDate: '2026-05-10', piNo: 'FJ26160', customerName: 'Euro Kitchen BV', customerInfo: 'Euro Kitchen BV\nDamrak 12, 1012 LG Amsterdam, Netherlands', contacts: [{type:'邮箱',value:'order@eurokitchen.nl'}], portLoading: 'SHENZHEN, CHINA', portDischarge: 'ROTTERDAM, NETHERLANDS', orderItems: [{model:'21L IH',qty:300,price:7600,amount:2280000}], freight: 4200, container: '1x40HQ', currency: 'CNY', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'NETHERLANDS', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-15', status: '待出货', payStatus: '已收全款', notes: 'IH高端产品，欧洲市场需求增长', chatImages: [], profileImages: [] },
+      { id: 'ORD-20260512-001', piDate: '2026-05-12', piNo: 'FJ26162', customerName: '示例客户A', customerInfo: '示例客户A\nNew York, USA', contacts: [{type:'邮箱',value:'tom@example.com'}], portLoading: 'GUANGZHOU, CHINA', portDischarge: 'NEW YORK, USA', orderItems: [{model:'21L电饭煲电脑',qty:200,price:565.80,amount:113160}], freight: 3200, container: '1x40GP', currency: 'USD', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'USA', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-20', status: '待开PI', payStatus: '未收款', notes: '首批试单', chatImages: [], profileImages: [] },
+    ],
   };
 }
 
@@ -266,7 +306,7 @@ async function loadCloudData() {
     cloudLoading = false;
     return;
   }
-  if (data?.data) {
+  if ((data != null ? data.data : undefined)) {
     state.customers = data.data.customers || [];
     state.inquiries = data.data.inquiries || [];
     state.orders = data.data.orders || [];
@@ -290,14 +330,14 @@ async function withTimeout(promise, ms = 12000) {
 }
 
 function cloudErrorText(error, action) {
-  const msg = `${error?.message || ""} ${error?.details || ""}`;
-  if (msg.includes("crm_data") || msg.includes("does not exist") || error?.code === "42P01") {
+  const msg = `${(error != null ? error.message : undefined) || ""} ${(error != null ? error.details : undefined) || ""}`;
+  if (msg.includes("crm_data") || msg.includes("does not exist") || (error != null ? error.code : undefined) === "42P01") {
     return `云端${action}失败：请先在 Supabase 跑建表 SQL`;
   }
-  if (msg.includes("permission") || msg.includes("row-level security") || error?.code === "42501") {
+  if (msg.includes("permission") || msg.includes("row-level security") || (error != null ? error.code : undefined) === "42501") {
     return `云端${action}失败：权限策略未生效`;
   }
-  return `云端${action}失败：${error?.message || "未知错误"}`;
+  return `云端${action}失败：${(error != null ? error.message : undefined) || "未知错误"}`;
 }
 
 async function initCloudAuth() {
@@ -306,11 +346,11 @@ async function initCloudAuth() {
     return;
   }
   const { data } = await supabaseClient.auth.getSession();
-  currentUser = data.session?.user || null;
+  currentUser = (data.session != null ? data.session.user : undefined) || null;
   updateAuthUi();
   if (currentUser) await loadCloudData();
   supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-    currentUser = session?.user || null;
+    currentUser = (session != null ? session.user : undefined) || null;
     updateAuthUi();
     if (currentUser) await loadCloudData();
     else setCloudStatus("本地模式");
@@ -318,9 +358,11 @@ async function initCloudAuth() {
 }
 
 function updateAuthUi() {
-  document.getElementById("loginBtn")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("emailLoginInput")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("logoutBtn")?.classList.toggle("hidden", !currentUser);
+  (document.getElementById("loginBtn") != null ? document.getElementById("loginBtn").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("signupBtn") != null ? document.getElementById("signupBtn").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("logoutBtn") != null ? document.getElementById("logoutBtn").classList : undefined).toggle("hidden", !currentUser);
   setCloudStatus(currentUser ? `云端已登录：${currentUser.email || "Google账号"}` : "本地模式");
 }
 
@@ -399,6 +441,9 @@ function matchesSearch(item, query) {
 function render() {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active-view"));
   document.getElementById(currentView).classList.add("active-view");
+  // Show/hide date filter for relevant views
+  const df = document.getElementById('dateRangeFilter');
+  if (df) df.style.display = ['customers','inquiries','orders'].includes(currentView) ? 'flex' : 'none';
   document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === currentView));
   document.getElementById("viewTitle").textContent = viewMeta[currentView][0];
   document.getElementById("viewSubtitle").textContent = viewMeta[currentView][1];
@@ -412,6 +457,8 @@ function render() {
   renderOrders();
   renderFobCalculator();
   renderProducts();
+  renderKanban();
+  renderReports();
 }
 
 function renderStats() {
@@ -451,7 +498,7 @@ function getReminders() {
   state.inquiries.forEach((item) => {
     const delta = daysUntil(item.nextFollow);
     if (item.nextFollow && delta <= 3 && !["已成交", "无效"].includes(item.stage)) {
-      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: item.nextFollow, status: item.stage, customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: item.sendContent || latestFollow(item)?.sendContent || item.need || "继续跟进询盘", context: latestFollow(item)?.content || item.notes, delta });
+      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: item.nextFollow, status: item.stage, customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: item.sendContent || (latestFollow(item) != null ? latestFollow(item).sendContent : undefined) || item.need || "继续跟进询盘", context: (latestFollow(item) != null ? latestFollow(item).content : undefined) || item.notes, delta });
     }
   });
   state.orders.forEach((item) => {
@@ -479,10 +526,22 @@ function renderReminders() {
 }
 
 function renderCustomers() {
-  const rows = state.customers.filter((item) => matchesSearch(item, document.getElementById("customerSearch").value));
-  document.getElementById("customerList").innerHTML = makeTable(["客户", "类型", "联系人", "首次接触", "国家", "性质", "联系方式", "产品", "下次跟进", "图片", "操作"], rows.map((item) => [
-    item.name, item.customerKind, item.personName, item.firstContact, item.country, item.nature, contactSummary(item), text(item.productCategories), item.nextFollow, imageCount(item), actionButtons("customer", item.id)
-  ]));
+  let rows = state.customers.filter((item) => matchesSearch(item, document.getElementById("customerSearch").value));
+  rows = rows.filter(item => inDateRange(item, 'firstContact'));
+  // Sort
+  if (sortState.field) {
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const va = (a[sortState.field] || '').toString().toLowerCase();
+      const vb = (b[sortState.field] || '').toString().toLowerCase();
+      if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
+      return va.localeCompare(vb) * dir;
+    });
+  }
+  document.getElementById("customerList").innerHTML = makeTable(["客户", "类型", "联系人", "首次接触", "国家", "性质", "联系方式", "产品", "下次跟进", "图片", "操作"], rows.map((item) => ({
+    _id: item.id,
+    0: item.name, 1: item.customerKind, 2: item.personName, 3: item.firstContact, 4: item.country, 5: item.nature, 6: contactSummary(item), 7: text(item.productCategories), 8: item.nextFollow, 9: imageCount(item), 10: actionButtons("customer", item.id)
+  })), true, 'customer');
 }
 
 function renderInquiryFilters() {
@@ -506,21 +565,31 @@ function fillSelect(id, label, options) {
 }
 
 function filteredInquiries() {
-  const q = document.getElementById("inquirySearch")?.value || "";
-  const stage = document.getElementById("inquiryStageFilter")?.value || "";
-  const source = document.getElementById("inquirySourceFilter")?.value || "";
-  const product = document.getElementById("inquiryProductFilter")?.value || "";
+  const q = (document.getElementById("inquirySearch") != null ? document.getElementById("inquirySearch").value : undefined) || "";
+  const stage = (document.getElementById("inquiryStageFilter") != null ? document.getElementById("inquiryStageFilter").value : undefined) || "";
+  const source = (document.getElementById("inquirySourceFilter") != null ? document.getElementById("inquirySourceFilter").value : undefined) || "";
+  const product = (document.getElementById("inquiryProductFilter") != null ? document.getElementById("inquiryProductFilter").value : undefined) || "";
   return state.inquiries.filter((item) => matchesSearch(item, q) && (!stage || item.stage === stage) && (!source || item.source === source) && (!product || (item.productCategories || []).includes(product)));
 }
 
 function renderInquiries() {
-  const rows = filteredInquiries();
+  let rows = filteredInquiries();
+  rows = rows.filter(item => inDateRange(item, 'date'));
+  if (sortState.field) {
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const va = (a[sortState.field] || '').toString().toLowerCase();
+      const vb = (b[sortState.field] || '').toString().toLowerCase();
+      if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
+      return va.localeCompare(vb) * dir;
+    });
+  }
   if (!activeInquiryId && rows[0]) activeInquiryId = rows[0].id;
   const focus = state.inquiries.find((item) => item.id === activeInquiryId) || rows[0];
   renderInquiryFocus(focus);
-  document.getElementById("inquiryList").innerHTML = makeTable(["询盘号", "日期", "客户", "阶段", "国家", "来源", "产品", "需求", "下次跟进", "跟进数", "操作"], rows.map((item) => [
-    item.id, item.date, item.customerName, item.stage, item.country, item.source, text(item.productCategories), item.need, item.nextFollow, item.follows?.length || 0, `<div class="row-actions"><button class="row-btn" data-focus-inquiry="${item.id}">查看跟进</button>${actionButtons("inquiry", item.id)}</div>`
-  ]));
+  document.getElementById("inquiryList").innerHTML = makeTable(["询盘号", "日期", "客户", "阶段", "国家", "来源", "产品", "需求", "下次跟进", "跟进数", "操作"], rows.map((item) => ({
+    _id: item.id, 0: item.id, 1: item.date, 2: item.customerName, 3: item.stage, 4: item.country, 5: item.source, 6: text(item.productCategories), 7: item.need, 8: item.nextFollow, 9: (item.follows != null ? item.follows.length : undefined) || 0, 10: `<div class="row-actions"><button class="row-btn" data-focus-inquiry="${item.id}">查看跟进</button>${actionButtons("inquiry", item.id)}</div>`
+  })), true, 'inquiry');
 }
 
 function renderInquiryFocus(item) {
@@ -533,13 +602,23 @@ function renderInquiryFocus(item) {
 }
 
 function renderOrders() {
-  const rows = state.orders.filter((item) => matchesSearch(item, document.getElementById("orderSearch").value));
+  let rows = state.orders.filter((item) => matchesSearch(item, document.getElementById("orderSearch").value));
+  rows = rows.filter(item => inDateRange(item, 'piDate'));
+  if (sortState.field) {
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const va = (a[sortState.field] || '').toString().toLowerCase();
+      const vb = (b[sortState.field] || '').toString().toLowerCase();
+      if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
+      return va.localeCompare(vb) * dir;
+    });
+  }
   if (!activeOrderId && rows[0]) activeOrderId = rows[0].id;
   const active = state.orders.find((item) => item.id === activeOrderId) || rows[0];
   renderPiPreview(active);
-  document.getElementById("orderList").innerHTML = makeTable(["PI编号", "日期", "客户", "产品", "金额", "运费", "状态", "交期", "操作"], rows.map((item) => [
-    item.id, item.piDate, item.customerName, orderProducts(item), money(orderTotal(item), item.currency), item.freight || "", item.status, item.deliveryDate, `<div class="row-actions"><button class="row-btn" data-preview-order="${item.id}">预览PI</button>${actionButtons("order", item.id)}</div>`
-  ]));
+  document.getElementById("orderList").innerHTML = makeTable(["PI编号", "日期", "客户", "产品", "金额", "运费", "状态", "交期", "操作"], rows.map((item) => ({
+    _id: item.id, 0: item.id, 1: item.piDate, 2: item.customerName, 3: orderProducts(item), 4: money(orderTotal(item), item.currency), 5: item.freight || "", 6: item.status, 7: item.deliveryDate, 8: `<div class="row-actions"><button class="row-btn" data-preview-order="${item.id}">预览PI</button>${actionButtons("order", item.id)}</div>`
+  })), true, 'order');
 }
 
 function renderProducts() {
@@ -550,8 +629,19 @@ function renderProducts() {
     filter.innerHTML = `<option value="">全部产品大类</option>${PRODUCT_CATEGORIES.map((x) => `<option value="${x}">${x}</option>`).join("")}`;
     filter.dataset.ready = "1";
   }
-  const rows = PRODUCT_CATALOG.filter((item) => matchesSearch(item, search.value) && (!filter.value || item.category === filter.value));
-  document.getElementById("productList").innerHTML = makeTable(["产品大类", "型号/小类", "内容", "状态", "跨境电商", "国外大客户", "国外中小批发商", "国外C端零售商", "成本底价", "详情"], rows.map((item) => [item.category, item.model, item.spec, item.status, item.crossBorder, item.overseas, item.wholesale, item.terminal, item.floor, `<button class="row-btn" data-product-detail="${escapeHtml(item.model)}">详情</button>`]));
+  let rows = PRODUCT_CATALOG.filter((item) => matchesSearch(item, search.value) && (!filter.value || item.category === filter.value));
+  if (sortState.field) {
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const va = (a[sortState.field] || '').toString().toLowerCase();
+      const vb = (b[sortState.field] || '').toString().toLowerCase();
+      if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
+      return va.localeCompare(vb) * dir;
+    });
+  }
+  document.getElementById("productList").innerHTML = makeTable(["产品大类", "型号/小类", "内容", "状态", "跨境电商", "国外大客户", "国外中小批发商", "国外C端零售商", "成本底价", "详情"], rows.map((item) => ({
+    _id: item.model, 0: item.category, 1: item.model, 2: item.spec, 3: item.status, 4: item.crossBorder, 5: item.overseas, 6: item.wholesale, 7: item.terminal, 8: item.floor, 9: `<button class="row-btn" data-product-detail="${escapeHtml(item.model)}">详情</button>`
+  })), true, 'product');
 }
 
 function renderFobCalculator() {
@@ -595,7 +685,7 @@ function renderFobCalculator() {
 function fillCalcFromProduct(model) {
   if (!model) return;
   const catalog = PRODUCT_CATALOG.find((item) => item.model === model);
-  const capacity = String(model).match(/[\d.]+L/)?.[0] || "";
+  const capacity = String(model).match(/[\d.]+L/)[0] || "";
   const params = PRODUCT_PARAMS.find((item) => item["产品型号"] === model) || PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "") === capacity);
   const set = (key, value) => {
     const el = document.querySelector(`[data-calc="${key}"]`);
@@ -614,7 +704,7 @@ function fillCalcFromProduct(model) {
 }
 
 function cbmFromPacking(value) {
-  const nums = String(value || "").match(/\d+(\.\d+)?/g)?.map(Number);
+  const nums = (String(value || "").match(/\d+(\.\d+)?/g) != null ? String(value || "").match(/\d+(\.\d+)?/g).map(Number) : undefined);
   if (!nums || nums.length < 3) return null;
   return nums[0] / 1000 * (nums[1] / 1000) * (nums[2] / 1000);
 }
@@ -625,10 +715,10 @@ function pcsFromPacking(value) {
 }
 
 function calculateFob() {
-  const value = (key) => Number(document.querySelector(`[data-calc="${key}"]`)?.value || 0);
-  const mode = document.querySelector('[data-calc="quoteMode"]')?.value || "FOB整柜";
-  const containerType = document.querySelector('[data-calc="containerType"]')?.value || "20GP";
-  const factoryTaxType = document.querySelector('[data-calc="factoryTaxType"]')?.value || "含税";
+  const value = (key) => Number((document.querySelector(`[data-calc="${key}"]`) != null ? document.querySelector(`[data-calc="${key}"]`).value : undefined) || 0);
+  const mode = (document.querySelector('[data-calc="quoteMode"]') != null ? document.querySelector('[data-calc="quoteMode"]').value : undefined) || "FOB整柜";
+  const containerType = (document.querySelector('[data-calc="containerType"]') != null ? document.querySelector('[data-calc="containerType"]').value : undefined) || "20GP";
+  const factoryTaxType = (document.querySelector('[data-calc="factoryTaxType"]') != null ? document.querySelector('[data-calc="factoryTaxType"]').value : undefined) || "含税";
   const factoryPrice = value("factoryPrice");
   const pcsPerBox = value("pcsPerBox") || 1;
   const boxCount = value("boxCount") || 1;
@@ -707,9 +797,51 @@ function renderPiPreview(order) {
   </div>`;
 }
 
-function makeTable(headers, rows) {
+function makeTable(headers, rows, sortable = false, type = null) {
   if (!rows.length) return `<div class="empty">还没有数据，先新增一条。</div>`;
-  return `<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell ?? ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const cbCol = bulkSelected.size > 0 && type ? `<th class="cb-cell"><input type="checkbox" onchange="toggleAllBulk('${type}', this.checked)" id="bulkAll_${type}"></th>` : '';
+  const headerRow = headers.map((h, i) => {
+    const cls = sortable ? 'sortable' : '';
+    const onclick = sortable ? `onclick="sortAndRender('${type}', ${i})"` : '';
+    return `<th class="${cls}" ${onclick}>${escapeHtml(h)}</th>`;
+  }).join('');
+  const bodyRows = rows.map((row) => {
+    const id = row._id || '';
+    const cells = Array.isArray(row) ? row : Object.keys(row).filter(k => k !== '_id').sort((a,b) => Number(a)-Number(b)).map(k => row[k]);
+    const cbCell = bulkSelected.size > 0 && type && id ? `<td class="cb-cell"><input type="checkbox" ${bulkSelected.has(`${type}:${id}`) ? 'checked' : ''} onchange="toggleBulkSelect('${type}', '${id}')"></td>` : '';
+    return `<tr>${cbCell}${cells.map((cell) => `<td>${cell ?? ''}</td>`).join('')}</tr>`;
+  }).join('');
+  return `<table><thead><tr>${cbCol}${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+function sortAndRender(type, fieldIdx) {
+  // Map field index to actual field name based on type
+  const fieldMap = {
+    customer: ['name','customerKind','personName','firstContact','country','nature','contacts','productCategories','nextFollow'],
+    inquiry: ['id','date','customerName','stage','country','source','productCategories','need','nextFollow'],
+    order: ['id','piDate','customerName','items','total','freight','status','deliveryDate']
+  };
+  const fields = fieldMap[type] || [];
+  const field = fields[fieldIdx];
+  if (!field || !sortState) return;
+  if (sortState.field === field) {
+    sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.field = field;
+    sortState.dir = 'asc';
+  }
+  render();
+}
+
+function toggleAllBulk(type, checked) {
+  const list = collectionFor(type);
+  list.forEach(item => {
+    const key = `${type}:${item.id}`;
+    if (checked) bulkSelected.add(key);
+    else bulkSelected.delete(key);
+  });
+  updateBulkBar();
+  render();
 }
 
 function actionButtons(type, id) {
@@ -772,8 +904,8 @@ function bindFormHelpers() {
     const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
     if (files.length) { e.preventDefault(); addFiles(files, zone.dataset.imageZone); }
   }));
-  document.getElementById("addContactBtn")?.addEventListener("click", () => document.getElementById("addContactBtn").insertAdjacentHTML("beforebegin", contactRowHtml()));
-  document.getElementById("addOrderItemBtn")?.addEventListener("click", () => document.getElementById("addOrderItemBtn").insertAdjacentHTML("beforebegin", orderItemRowHtml()));
+  (document.getElementById("addContactBtn") != null ? document.getElementById("addContactBtn").addEventListener("click", () => document.getElementById("addContactBtn").insertAdjacentHTML("beforebegin", contactRowHtml())) : undefined);
+  (document.getElementById("addOrderItemBtn") != null ? document.getElementById("addOrderItemBtn").addEventListener("click", () => document.getElementById("addOrderItemBtn").insertAdjacentHTML("beforebegin", orderItemRowHtml())) : undefined);
 }
 
 function bindKindVisibility() {
@@ -860,7 +992,7 @@ function normalizeRecord(type, data) {
     data.stage ||= "新询盘";
     data.phone = primaryContact(data);
     data.email ||= contactByType(data, "邮箱");
-    data.follows = mergeFollow(editing.id ? findRecord("inquiry", editing.id)?.follows : [], data);
+    data.follows = mergeFollow(editing.id ? (findRecord("inquiry", editing.id) != null ? findRecord("inquiry", editing.id).follows : undefined) : [], data);
   }
   if (type === "order") {
     data.piDate = toISO(data.piDateInput) || formatISO(new Date());
@@ -885,13 +1017,13 @@ function syncInquiryFromCustomer(customer) {
   if (!["已回复", "有询盘", "已报价"].includes(customer.stage)) return;
   const existing = state.inquiries.find((x) => x.customerRef === customer.id);
   const date = customer.firstContact || formatISO(new Date());
-  const inquiry = { ...(existing || {}), customerRef: customer.id, id: existing?.id || makeInquiryId(date), dateInput: customer.firstContactInput, date, customerName: customer.name, customerKind: customer.customerKind, companyName: customer.companyName, personName: customer.personName, position: customer.position, contacts: customer.contacts || [], country: customer.country, nature: customer.nature, source: customer.source, stage: customer.stage === "已报价" ? "已报价" : "已回复", level: customer.level, productCategories: customer.productCategories || [], productModels: customer.productModels || [], need: customer.nextAction, sendContent: customer.nextAction, nextFollowInput: customer.nextFollowInput, nextFollow: customer.nextFollow, notes: customer.notes, chatImages: customer.chatImages || [], profileImages: customer.profileImages || [] };
+  const inquiry = { ...(existing || {}), customerRef: customer.id, id: (existing != null ? existing.id : undefined) || makeInquiryId(date), dateInput: customer.firstContactInput, date, customerName: customer.name, customerKind: customer.customerKind, companyName: customer.companyName, personName: customer.personName, position: customer.position, contacts: customer.contacts || [], country: customer.country, nature: customer.nature, source: customer.source, stage: customer.stage === "已报价" ? "已报价" : "已回复", level: customer.level, productCategories: customer.productCategories || [], productModels: customer.productModels || [], need: customer.nextAction, sendContent: customer.nextAction, nextFollowInput: customer.nextFollowInput, nextFollow: customer.nextFollow, notes: customer.notes, chatImages: customer.chatImages || [], profileImages: customer.profileImages || [] };
   if (existing) Object.assign(existing, inquiry); else state.inquiries.push(inquiry);
 }
 
 function syncCustomerFromInquiry(inquiry) {
   const existing = state.customers.find((x) => samePerson(x, inquiry));
-  const customer = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: inquiry.customerName, customerKind: inquiry.customerKind, companyName: inquiry.companyName, personName: inquiry.personName, position: inquiry.position, contacts: inquiry.contacts || existing?.contacts || [], firstContactInput: existing?.firstContactInput || inquiry.dateInput, firstContact: existing?.firstContact || inquiry.date, country: inquiry.country, nature: inquiry.nature, source: inquiry.source, level: inquiry.level, productCategories: inquiry.productCategories || [], productModels: inquiry.productModels || [], nextFollowInput: inquiry.nextFollowInput, nextFollow: inquiry.nextFollow, nextAction: inquiry.sendContent || inquiry.need, notes: inquiry.notes, chatImages: inquiry.chatImages || existing?.chatImages || [], profileImages: inquiry.profileImages || existing?.profileImages || [] };
+  const customer = { ...(existing || {}), id: (existing != null ? existing.id : undefined) || crypto.randomUUID(), name: inquiry.customerName, customerKind: inquiry.customerKind, companyName: inquiry.companyName, personName: inquiry.personName, position: inquiry.position, contacts: inquiry.contacts || (existing != null ? existing.contacts : undefined) || [], firstContactInput: (existing != null ? existing.firstContactInput : undefined) || inquiry.dateInput, firstContact: (existing != null ? existing.firstContact : undefined) || inquiry.date, country: inquiry.country, nature: inquiry.nature, source: inquiry.source, level: inquiry.level, productCategories: inquiry.productCategories || [], productModels: inquiry.productModels || [], nextFollowInput: inquiry.nextFollowInput, nextFollow: inquiry.nextFollow, nextAction: inquiry.sendContent || inquiry.need, notes: inquiry.notes, chatImages: inquiry.chatImages || (existing != null ? existing.chatImages : undefined) || [], profileImages: inquiry.profileImages || (existing != null ? existing.profileImages : undefined) || [] };
   if (existing) Object.assign(existing, customer); else state.customers.push(customer);
   inquiry.customerRef = customer.id;
 }
@@ -905,7 +1037,7 @@ function primaryContact(item) {
 }
 
 function contactByType(item, type) {
-  return (item.contacts || []).find((x) => x.type === type)?.value || "";
+  return ((item.contacts || []).find((x) => x.type === type) != null ? (item.contacts || []).find((x) => x.type === type).value : undefined) || "";
 }
 
 function latestFollow(item) {
@@ -935,7 +1067,7 @@ function openDetail(type, id) {
 
 function openProductDetail(model) {
   const compact = PRODUCT_CATALOG.find((item) => item.model === model);
-  const byCapacity = compact ? PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "").includes(String(compact.model).match(/[\d.]+L/)?.[0] || "")) : null;
+  const byCapacity = compact ? PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "").includes(String(compact.model).match(/[\d.]+L/)[0] || "")) : null;
   const byModel = PRODUCT_PARAMS.find((item) => item["产品型号"] === model);
   const record = byModel || byCapacity;
   detailTarget = null;
@@ -1004,20 +1136,20 @@ function productValueEn(key, value) {
 
 function detailHtml(record) {
   const rows = Object.entries(record).filter(([k]) => !["id", "customerRef", "chatImages", "profileImages", "attachments", "follows", "items"].includes(k)).map(([k, v]) => `<div class="detail-row"><span>${escapeHtml(k)}</span><strong>${escapeHtml(text(v))}</strong></div>`).join("");
-  const follows = record.follows?.length ? `<div class="detail-row wide-detail"><span>跟进时间线</span>${record.follows.map((f) => `<strong>${escapeHtml(f.date)}：${escapeHtml(f.content)} ｜ 要发：${escapeHtml(f.sendContent || "")}</strong>`).join("")}</div>` : "";
+  const follows = (record.follows != null ? record.follows.length : undefined) ? `<div class="detail-row wide-detail"><span>跟进时间线</span>${record.follows.map((f) => `<strong>${escapeHtml(f.date)}：${escapeHtml(f.content)} ｜ 要发：${escapeHtml(f.sendContent || "")}</strong>`).join("")}</div>` : "";
   const chat = (record.chatImages || []).map(imageThumb).join("");
   const profile = (record.profileImages || []).map(imageThumb).join("");
   return `${rows}${follows}<div class="detail-images"><h4>聊天图片</h4>${chat || "<p>没有聊天图片</p>"}</div><div class="detail-images"><h4>资料图片</h4>${profile || "<p>没有资料图片</p>"}</div>`;
 }
 
 function imageCount(item) {
-  const c = item.chatImages?.length || 0;
-  const p = item.profileImages?.length || 0;
+  const c = (item.chatImages != null ? item.chatImages.length : undefined) || 0;
+  const p = (item.profileImages != null ? item.profileImages.length : undefined) || 0;
   return c || p ? `<span class="tag">聊天${c} / 资料${p}</span>` : "";
 }
 
 function contactSummary(item) {
-  return item.contacts?.length ? item.contacts.map((x) => `${x.type}: ${escapeHtml(x.value)}`).join("<br>") : "";
+  return (item.contacts != null ? item.contacts.length : undefined) ? item.contacts.map((x) => `${x.type}: ${escapeHtml(x.value)}`).join("<br>") : "";
 }
 
 function orderProducts(order) {
@@ -1079,7 +1211,324 @@ function importData(file) {
   reader.readAsText(file);
 }
 
-document.querySelectorAll(".nav-btn").forEach((btn) => btn.addEventListener("click", () => { currentView = btn.dataset.view; render(); }));
+
+/* ===== DARK MODE ===== */
+function initTheme() {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('cyc-crm-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+/* ===== MOBILE NAV ===== */
+function toggleMobileNav() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeMobileNav() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+/* ===== KANBAN BOARD ===== */
+function renderKanban() {
+  const board = document.getElementById('kanbanBoard');
+  if (!board || currentView !== 'kanban') return;
+  const inquiries = state.inquiries;
+  const grouped = {};
+  STAGES.forEach(s => grouped[s] = []);
+  inquiries.forEach(item => {
+    const stage = item.stage || '新询盘';
+    if (!grouped[stage]) grouped[stage] = [];
+    grouped[stage].push(item);
+  });
+  board.innerHTML = Object.entries(grouped).map(([stage, items]) => `
+    <div class="kanban-col" data-stage="${escapeHtml(stage)}" 
+         ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move'; event.currentTarget.classList.add('drag-over')"
+         ondragleave="event.currentTarget.classList.remove('drag-over')"
+         ondrop="handleKanbanDrop(event, '${escapeHtml(stage)}')">
+      <h4>${escapeHtml(stage)} <span class="count">${items.length}</span></h4>
+      ${items.map(item => `
+        <div class="kanban-card" draggable="true" 
+             data-inquiry-id="${item.id}"
+             ondragstart="handleDragStart(event, '${item.id}')"
+             ondragend="handleDragEnd(event)"
+             onclick="openDetail('inquiry', '${item.id}')">
+          <div class="card-title">${escapeHtml(item.customerName)}</div>
+          <div class="card-meta">${escapeHtml(item.id)} · ${escapeHtml(item.country || '')} · ${escapeHtml(text(item.productCategories))}</div>
+        </div>`).join('')}
+    </div>
+  `).join('');
+}
+
+function handleDragStart(e, id) {
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+  e.target.classList.add('dragging');
+}
+function handleDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drag-over'));
+}
+function handleKanbanDrop(e, stage) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain');
+  const inquiry = findRecord('inquiry', id);
+  if (inquiry && inquiry.stage !== stage) {
+    snapshot();
+    inquiry.stage = stage;
+    // Auto-add follow record
+    if (!inquiry.follows) inquiry.follows = [];
+    inquiry.follows.push({
+      id: crypto.randomUUID(),
+      date: formatISO(new Date()),
+      content: `阶段变更为: ${stage}`,
+      sendContent: '',
+      nextFollow: inquiry.nextFollow || ''
+    });
+    saveState();
+    render();
+  }
+}
+
+/* ===== REPORTS ===== */
+function renderReports() {
+  if (currentView !== 'reports') return;
+  const orders = state.orders;
+  const inquiries = state.inquiries;
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+  const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+  
+  // Total revenue
+  const totalRevenue = orders.reduce((sum, o) => sum + orderTotal(o), 0);
+  document.getElementById('reportRevenue').textContent = money(totalRevenue, '');
+  
+  // This month orders
+  const monthOrders = orders.filter(o => {
+    const d = new Date(o.piDate); return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  });
+  document.getElementById('reportMonthOrders').textContent = monthOrders.length;
+  
+  // Conversion rate (deals / total inquiries)
+  const totalInquiries = inquiries.length;
+  const deals = inquiries.filter(i => i.stage === '已成交').length;
+  const convRate = totalInquiries ? Math.round(deals / totalInquiries * 100) : 0;
+  document.getElementById('reportConversion').textContent = convRate + '%';
+  
+  // Previous month comparison
+  const lastMonthOrders = orders.filter(o => {
+    const d = new Date(o.piDate); return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+  });
+  const trend = lastMonthOrders.length ? Math.round((monthOrders.length - lastMonthOrders.length) / lastMonthOrders.length * 100) : 0;
+  const trendEl = document.getElementById('reportOrderTrend');
+  trendEl.textContent = trend >= 0 ? `↑ ${trend}% 环比` : `↓ ${Math.abs(trend)}% 环比`;
+  trendEl.className = 'trend' + (trend < 0 ? ' down' : '');
+  
+  // Sales funnel
+  const funnelStages = ['信息已收集', '已联系未回复', '已回复', '需求确认', '已推荐', '已报价', '谈判中', '已成交'];
+  const funnelData = funnelStages.map(s => {
+    const count = inquiries.filter(i => i.stage === s).length;
+    return [s, count];
+  }).filter(([,c]) => c > 0);
+  drawBars('funnelChart', funnelData);
+  
+  // Monthly revenue trend (last 6 months)
+  const monthlyData = {};
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(thisYear, thisMonth - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    monthlyData[key] = 0;
+  }
+  orders.forEach(o => {
+    const d = new Date(o.piDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (monthlyData[key] !== undefined) monthlyData[key] += orderTotal(o);
+  });
+  drawBars('monthlyRevenueChart', Object.entries(monthlyData));
+}
+
+/* ===== BULK OPERATIONS ===== */
+function toggleBulkSelect(type, id) {
+  const key = `${type}:${id}`;
+  if (bulkSelected.has(key)) bulkSelected.delete(key);
+  else bulkSelected.add(key);
+  updateBulkBar();
+  render();
+}
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const count = document.getElementById('bulkCount');
+  if (!bar || !count) return;
+  bar.classList.toggle('visible', bulkSelected.size > 0);
+  count.textContent = `已选 ${bulkSelected.size} 项`;
+}
+function clearBulkSelection() {
+  bulkSelected.clear();
+  updateBulkBar();
+  render();
+}
+function bulkDelete() {
+  if (!bulkSelected.size) return;
+  if (!confirm(`确定删除 ${bulkSelected.size} 条记录吗？`)) return;
+  snapshot();
+  for (const key of bulkSelected) {
+    const [type, id] = key.split(':');
+    const list = collectionFor(type);
+    const idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) list.splice(idx, 1);
+  }
+  bulkSelected.clear();
+  updateBulkBar();
+  saveState();
+  render();
+}
+function bulkChangeStage() {
+  if (!bulkSelected.size) return;
+  const stage = prompt('请输入新阶段：', STAGES.join('/'));
+  if (!stage) return;
+  snapshot();
+  for (const key of bulkSelected) {
+    const [type, id] = key.split(':');
+    if (type === 'inquiry') {
+      const item = findRecord('inquiry', id);
+      if (item) {
+        item.stage = stage;
+        if (!item.follows) item.follows = [];
+        item.follows.push({ id: crypto.randomUUID(), date: formatISO(new Date()), content: `批量变更阶段为: ${stage}`, sendContent: '', nextFollow: item.nextFollow || '' });
+      }
+    }
+  }
+  saveState();
+  render();
+}
+
+/* ===== SORTING ===== */
+function sortTable(type, field, rows) {
+  if (sortState.field === field) {
+    sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.field = field;
+    sortState.dir = 'asc';
+  }
+  const dir = sortState.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = (a[field] || '').toString().toLowerCase();
+    const vb = (b[field] || '').toString().toLowerCase();
+    if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
+    return va.localeCompare(vb) * dir;
+  });
+}
+
+/* ===== DATE RANGE FILTER ===== */
+function inDateRange(item, field) {
+  const from = (document.getElementById('dateFrom') != null ? document.getElementById('dateFrom').value : undefined);
+  const to = (document.getElementById('dateTo') != null ? document.getElementById('dateTo').value : undefined);
+  if (!from && !to) return true;
+  const val = item[field];
+  if (!val) return !from && !to;
+  return (!from || val >= from) && (!to || val <= to);
+}
+
+/* ===== PI PRINT ===== */
+function printPI() {
+  window.print();
+}
+
+/* ===== CUSTOMER MERGE ===== */
+function openMergeDialog() {
+  const list = state.customers;
+  document.getElementById('mergeSourceList').innerHTML = list.map(c => 
+    `<div class="merge-item" data-cid="${c.id}" onclick="selectMergeSource('${c.id}')">${escapeHtml(c.name)} · ${escapeHtml(c.country || '')} · ${escapeHtml(contactSummary(c))}</div>`
+  ).join('');
+  document.getElementById('mergeTargetList').innerHTML = list.map(c => 
+    `<div class="merge-item" data-cid="${c.id}" onclick="selectMergeTarget('${c.id}')">${escapeHtml(c.name)} · ${escapeHtml(c.country || '')} · ${escapeHtml(contactSummary(c))}</div>`
+  ).join('');
+  mergeSourceId = null;
+  mergeTargetId = null;
+  document.getElementById('mergeDialog').showModal();
+}
+function selectMergeSource(id) {
+  mergeSourceId = id;
+  document.querySelectorAll('#mergeSourceList .merge-item').forEach(el => el.classList.toggle('selected', el.dataset.cid === id));
+}
+function selectMergeTarget(id) {
+  mergeTargetId = id;
+  document.querySelectorAll('#mergeTargetList .merge-item').forEach(el => el.classList.toggle('selected', el.dataset.cid === id));
+}
+function confirmMerge() {
+  if (!mergeSourceId || !mergeTargetId) return alert('请先选择源客户和目标客户');
+  if (mergeSourceId === mergeTargetId) return alert('不能合并到同一个客户');
+  if (!confirm('确定将源客户合并到目标客户吗？源客户的询盘和订单将转移到目标客户。')) return;
+  snapshot();
+  const source = findRecord('customer', mergeSourceId);
+  const target = findRecord('customer', mergeTargetId);
+  if (!source || !target) return;
+  // Move inquiries
+  state.inquiries.forEach(i => { if (i.customerRef === source.id) i.customerRef = target.id; });
+  // Merge contacts
+  target.contacts = [...(target.contacts || []), ...(source.contacts || [])];
+  // Merge product categories
+  target.productCategories = [...new Set([...(target.productCategories || []), ...(source.productCategories || [])])];
+  // Merge images
+  target.chatImages = [...(target.chatImages || []), ...(source.chatImages || [])];
+  target.profileImages = [...(target.profileImages || []), ...(source.profileImages || [])];
+  // Remove source customer
+  const idx = state.customers.findIndex(c => c.id === source.id);
+  if (idx >= 0) state.customers.splice(idx, 1);
+  saveState();
+  document.getElementById('mergeDialog').close();
+  render();
+}
+
+/* ===== QUICK FOLLOW-UP ===== */
+function quickFollowUp() {
+  var type = currentView === 'customers' ? 'customer' : currentView === 'orders' ? 'order' : 'inquiry';
+  var list = collectionFor(type);
+  if (!list.length) {
+    openForm(type === 'customer' ? 'customer' : 'inquiry');
+    return;
+  }
+  var names = list.map(function(item, i) { return (i+1) + '. ' + (item.name || item.customerName || item.id); }).join('\n');
+  var idx = prompt('???????????\n' + names + '\n\n?????(??? 0 ??)');
+  if (idx === null) return;
+  if (idx === '0') { openForm(type === 'customer' ? 'customer' : 'inquiry'); return; }
+  var item = list[Number(idx) - 1];
+  if (!item) return alert('????');
+  if (type === 'inquiry') openForm('inquiry', item.id);
+  else openForm(type, item.id);
+}
+
+/* ===== INIT CALL ===== */
+initTheme();
+
+// Export to window for inline event handlers
+window.handleKanbanDrop = handleKanbanDrop;
+window.handleDragStart = handleDragStart;
+window.handleDragEnd = handleDragEnd;
+window.sortAndRender = sortAndRender;
+window.toggleBulkSelect = toggleBulkSelect;
+window.toggleAllBulk = toggleAllBulk;
+window.selectMergeSource = selectMergeSource;
+window.selectMergeTarget = selectMergeTarget;
+window.confirmMerge = confirmMerge;
+window.openMergeDialog = openMergeDialog;
+window.toggleTheme = toggleTheme;
+window.toggleMobileNav = toggleMobileNav;
+window.closeMobileNav = closeMobileNav;
+window.quickFollowUp = quickFollowUp;
+window.printPI = printPI;
+window.bulkDelete = bulkDelete;
+window.bulkChangeStage = bulkChangeStage;
+window.clearBulkSelection = clearBulkSelection;
+document.querySelectorAll(".nav-btn").forEach((btn) => btn.addEventListener("click", () => { currentView = btn.dataset.view; sortState = { field: null, dir: 'asc' }; bulkSelected.clear(); updateBulkBar(); closeMobileNav(); render(); }));
 document.getElementById("quickAddBtn").addEventListener("click", () => openForm({ dashboard: "customer", customers: "customer", inquiries: "inquiry", orders: "order", products: "inquiry" }[currentView] || "inquiry"));
 document.getElementById("recordForm").addEventListener("submit", saveForm);
 document.getElementById("cancelBtn").addEventListener("click", () => document.getElementById("formDialog").close());
@@ -1087,7 +1536,7 @@ document.getElementById("closeDialogBtn").addEventListener("click", () => docume
 document.getElementById("closeDetailBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailDoneBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailEditBtn").addEventListener("click", () => { if (detailTarget) { document.getElementById("detailDialog").close(); openForm(detailTarget.type, detailTarget.id); } });
-document.getElementById("clearInquiryFilters")?.addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); });
+(document.getElementById("clearInquiryFilters") != null ? document.getElementById("clearInquiryFilters").addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); }) : undefined);
 
 document.body.addEventListener("click", (e) => {
   const removeContact = e.target.closest("[data-remove-contact]");
@@ -1119,30 +1568,95 @@ document.querySelectorAll(".segment").forEach((btn) => btn.addEventListener("cli
 });
 document.getElementById("exportBtn").addEventListener("click", exportData);
 document.getElementById("importInput").addEventListener("change", (e) => importData(e.target.files[0]));
-document.getElementById("loginBtn")?.addEventListener("click", async () => {
+(document.getElementById("loginBtn") != null ? document.getElementById("loginBtn").addEventListener("click", async () => {
   if (!supabaseClient) return alert("Supabase 没有加载成功，请检查网络。");
-  const email = document.getElementById("emailLoginInput")?.value.trim();
-  if (!email) return alert("先输入你的邮箱。");
-  const { error } = await supabaseClient.auth.signInWithOtp({
+  const email = (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").value : undefined).trim();
+  const password = (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").value : undefined);
+  if (!email || !password) return alert("请输入邮箱和密码。");
+  const { error } = await supabaseClient.auth.signInWithPassword({
     email,
-    options: {
-      emailRedirectTo: window.location.origin + window.location.pathname,
-    },
+    password,
   });
   if (error) {
     console.error(error);
-    alert(`发送失败：${error.message || "请检查 Supabase 邮箱登录设置"}`);
+    alert(`登录失败：${authErrorText(error)}`);
   } else {
-    setCloudStatus("登录链接已发送，请去邮箱点击链接");
-    alert("登录链接已发送到邮箱，点击邮件里的链接就能登录。");
+    setCloudStatus("登录成功，正在加载云端数据...");
   }
-});
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+}) : undefined);
+
+(document.getElementById("signupBtn") != null ? document.getElementById("signupBtn").addEventListener("click", async () => {
+  if (!supabaseClient) return alert("Supabase 没有加载成功，请检查网络。");
+  const email = (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").value : undefined).trim();
+  const password = (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").value : undefined);
+  if (!email || !password) return alert("请输入邮箱和密码。");
+  if (password.length < 6) return alert("密码至少 6 位。");
+  const { error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+  });
+  if (error) {
+    console.error(error);
+    alert(`注册失败：${authErrorText(error)}`);
+  } else {
+    alert("注册成功。如果 Supabase 要求邮箱确认，请先去邮箱点确认链接；如果没有要求，会自动登录。");
+  }
+}) : undefined);
+
+function authErrorText(error) {
+  const msg = (error != null ? error.message : undefined) || "";
+  if (msg.includes("Invalid login credentials")) return "邮箱或密码不对。";
+  if (msg.includes("Email not confirmed")) return "邮箱还没确认，请先去邮箱点确认链接。";
+  if (msg.includes("User already registered")) return "这个邮箱已经注册过了，请直接登录。";
+  if (msg.includes("Password should be at least")) return "密码太短，至少 6 位。";
+  return msg || "未知错误";
+}
+(document.getElementById("logoutBtn") != null ? document.getElementById("logoutBtn").addEventListener("click", async () => {
   if (!supabaseClient) return;
   await supabaseClient.auth.signOut();
-});
+}) : undefined);
 document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); undo(); } });
 
 saveState();
 render();
 initCloudAuth();
+
+// Theme toggle
+(document.getElementById('themeToggle') != null ? document.getElementById('themeToggle').addEventListener('click', toggleTheme) : undefined);
+
+// Mobile nav
+(document.getElementById('mobileNavToggle') != null ? document.getElementById('mobileNavToggle').addEventListener('click', toggleMobileNav) : undefined);
+(document.getElementById('sidebarOverlay') != null ? document.getElementById('sidebarOverlay').addEventListener('click', closeMobileNav) : undefined);
+
+// Close mobile nav when clicking a nav button
+document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => { closeMobileNav(); }));
+
+// Bulk operations
+(document.getElementById('bulkDeleteBtn') != null ? document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDelete) : undefined);
+(document.getElementById('bulkStageBtn') != null ? document.getElementById('bulkStageBtn').addEventListener('click', bulkChangeStage) : undefined);
+(document.getElementById('bulkCancelBtn') != null ? document.getElementById('bulkCancelBtn').addEventListener('click', clearBulkSelection) : undefined);
+
+// Date range filters
+(document.getElementById('dateFrom') != null ? document.getElementById('dateFrom').addEventListener('change', render) : undefined);
+(document.getElementById('dateTo') != null ? document.getElementById('dateTo').addEventListener('change', render) : undefined);
+(document.getElementById('clearDateFilter') != null ? document.getElementById('clearDateFilter').addEventListener('click', () => {
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  render();
+}) : undefined);
+
+// Customer merge
+(document.getElementById('closeMergeBtn') != null ? document.getElementById('closeMergeBtn').addEventListener('click', () => document.getElementById('mergeDialog').close()) : undefined);
+(document.getElementById('cancelMergeBtn') != null ? document.getElementById('cancelMergeBtn').addEventListener('click', () => document.getElementById('mergeDialog').close()) : undefined);
+(document.getElementById('confirmMergeBtn') != null ? document.getElementById('confirmMergeBtn').addEventListener('click', confirmMerge) : undefined);
+
+// Quick follow-up
+(document.getElementById('quickFollowBtn') != null ? document.getElementById('quickFollowBtn').addEventListener('click', quickFollowUp) : undefined);
+
+// Merge customer button
+(document.getElementById('mergeCustomerBtn') != null ? document.getElementById('mergeCustomerBtn').addEventListener('click', openMergeDialog) : undefined);
+
+// Print PI button
+(document.getElementById('printPIBtn') != null ? document.getElementById('printPIBtn').addEventListener('click', printPI) : undefined);
+
+render();
