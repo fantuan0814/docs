@@ -163,6 +163,15 @@ function productModels() {
   return PRODUCT_CATALOG.map((item) => `${item.category} / ${item.model}`);
 }
 
+// Handle ?fresh=password1 to reset demo data
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('fresh') === 'password1') {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('cyc-crm-theme');
+  }
+})();
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
@@ -199,8 +208,18 @@ function loadState() {
       chatImages: [],
       profileImages: [],
     }],
-    inquiries: [],
-    orders: [],
+    inquiries: [
+      { id: 'INQ-20260508-001', date: '2026-05-08', customerName: '示例客户A', customerKind: '公司', companyName: '示例客户A', personName: 'Tom', position: '采购', contacts: [{type:'WhatsApp',value:'+00 0000'},{type:'邮箱',value:'tom@example.com'}], country: '美国', nature: '批发商', source: 'FACEBOOK', stage: '已报价', level: 'B-潜力客户', productCategories: ['电饭煲电脑'], productModels: ['21L电饭煲电脑'], need: '需要21L电饭煲电脑500台，FOB价格', latestFollowText: '已发送FOB报价单，客户正在内部评估', sendContent: '21L电饭煲电脑 FOB USD 565.80/台，MOQ 200台', nextFollowInput: '5.15', nextFollow: '2026-05-15', notes: '价格敏感，可能需要调整', follows: [{id:'f1',date:'2026-05-08',content:'首次询盘，需要电饭煲电脑',sendContent:'',nextFollow:'2026-05-10'},{id:'f2',date:'2026-05-10',content:'已发送报价，客户要求降价',sendContent:'调整报价',nextFollow:'2026-05-15'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260509-001', date: '2026-05-09', customerName: 'ABC Electronics', customerKind: '公司', companyName: 'ABC Electronics Ltd.', personName: 'Sarah', position: 'CEO', contacts: [{type:'WhatsApp',value:'+1 234 5678'},{type:'邮箱',value:'sarah@abc.com'}], country: '英国', nature: '代理商', source: '国际站', stage: '样品中', level: 'A-重点客户', productCategories: ['电压力锅'], productModels: ['35L'], need: '35L电压力锅年采购量2000台，需要样品测试', latestFollowText: '样品已寄出，等待客户收到后反馈', sendContent: '样品单号：DHL 1234567890', nextFollowInput: '5.14', nextFollow: '2026-05-14', notes: '大客户潜力，跟进服务质量', follows: [{id:'f3',date:'2026-05-09',content:'国际站询盘，要求寄样',sendContent:'确认样品规格',nextFollow:'2026-05-12'},{id:'f4',date:'2026-05-12',content:'样品已发出，等待收货',sendContent:'发送物流单号',nextFollow:'2026-05-14'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260510-001', date: '2026-05-10', customerName: 'Dubai Trading Co.', customerKind: '公司', companyName: 'Dubai Trading Co. LLC', personName: 'Ahmed', position: '采购经理', contacts: [{type:'WhatsApp',value:'+971 50 1234'}], country: '阿联酋', nature: '贸易商', source: '社媒私信', stage: '谈判中', level: 'A-重点客户', productCategories: ['IH电磁饭煲','电饭煲电脑'], productModels: ['21L IH','25L电饭煲电脑'], need: 'IH电磁饭煲和电饭煲电脑各1000台，迪拜市场', latestFollowText: '价格已确认，正在谈付款方式', sendContent: '30%定金+70%发货前付清', nextFollowInput: '5.13', nextFollow: '2026-05-13', notes: '付款条件可能要求LC', follows: [{id:'f5',date:'2026-05-10',content:'社媒联系，需求明确',sendContent:'初步报价',nextFollow:'2026-05-11'},{id:'f6',date:'2026-05-11',content:'客户对价格满意，讨论付款',sendContent:'付款方式方案',nextFollow:'2026-05-13'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260511-001', date: '2026-05-11', customerName: 'Juan Carlos', customerKind: '个人', companyName: '', personName: 'Juan Carlos', position: '', contacts: [{type:'WhatsApp',value:'+52 1 5555'}], country: '墨西哥', nature: '终端客户', source: 'FACEBOOK', stage: '已联系未回复', level: 'C-普通客户', productCategories: ['煮粥锅'], productModels: ['23L'], need: '23L煮粥锅300台，本地餐厅使用', latestFollowText: '已发送产品资料，等待回复', sendContent: '23L煮粥锅 FOB USD 584.25/台', nextFollowInput: '5.14', nextFollow: '2026-05-14', notes: '', follows: [{id:'f7',date:'2026-05-11',content:'Facebook广告咨询',sendContent:'产品目录和价格',nextFollow:'2026-05-14'}], chatImages: [], profileImages: [] },
+      { id: 'INQ-20260512-001', date: '2026-05-12', customerName: 'Kenya Suppliers', customerKind: '公司', companyName: 'Kenya Suppliers Ltd.', personName: 'Mwangi', position: 'Director', contacts: [{type:'WhatsApp',value:'+254 700 111'}], country: '肯尼亚', nature: '批发商', source: '展会现场', stage: '需求确认', level: 'B-潜力客户', productCategories: ['保温桶','电压力锅'], productModels: ['50L保温桶','60L'], need: '保温桶和电压力锅，东非市场批发', latestFollowText: '展会认识的客户，正在确认具体型号数量', sendContent: '50L保温桶 USD 699/台，60L电压力锅 USD 2180/台', nextFollowInput: '5.16', nextFollow: '2026-05-16', notes: '广交会客户，印象不错', follows: [{id:'f8',date:'2026-05-12',content:'展会现场交换名片，初步沟通需求',sendContent:'公司介绍和产品目录',nextFollow:'2026-05-16'}], chatImages: [], profileImages: [] },
+    ],
+    orders: [
+      { id: 'ORD-20260508-001', piDate: '2026-05-08', piNo: 'FJ26158', customerName: 'Lagos Imports', customerInfo: 'Lagos Imports Nigeria Ltd.\n12 Marina Road, Lagos, Nigeria', contacts: [{type:'WhatsApp',value:'+234 800 2222'},{type:'邮箱',value:'info@lagosimports.com'}], portLoading: 'GUANGZHOU, CHINA', portDischarge: 'APAPA, LAGOS, NIGERIA', orderItems: [{model:'21L电饭煲电脑',qty:500,price:565.80,amount:282900},{model:'35L',qty:200,price:1180,amount:236000}], freight: 8500, container: '2x40HQ', currency: 'USD', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'NIGERIA', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-30', status: '生产中', payStatus: '已收定金', notes: '老客户返单，质量稳定', chatImages: [], profileImages: [] },
+      { id: 'ORD-20260510-001', piDate: '2026-05-10', piNo: 'FJ26160', customerName: 'Euro Kitchen BV', customerInfo: 'Euro Kitchen BV\nDamrak 12, 1012 LG Amsterdam, Netherlands', contacts: [{type:'邮箱',value:'order@eurokitchen.nl'}], portLoading: 'SHENZHEN, CHINA', portDischarge: 'ROTTERDAM, NETHERLANDS', orderItems: [{model:'21L IH',qty:300,price:7600,amount:2280000}], freight: 4200, container: '1x40HQ', currency: 'CNY', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'NETHERLANDS', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-15', status: '待出货', payStatus: '已收全款', notes: 'IH高端产品，欧洲市场需求增长', chatImages: [], profileImages: [] },
+      { id: 'ORD-20260512-001', piDate: '2026-05-12', piNo: 'FJ26162', customerName: '示例客户A', customerInfo: '示例客户A\nNew York, USA', contacts: [{type:'邮箱',value:'tom@example.com'}], portLoading: 'GUANGZHOU, CHINA', portDischarge: 'NEW YORK, USA', orderItems: [{model:'21L电饭煲电脑',qty:200,price:565.80,amount:113160}], freight: 3200, container: '1x40GP', currency: 'USD', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'USA', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-20', status: '待开PI', payStatus: '未收款', notes: '首批试单', chatImages: [], profileImages: [] },
+    ],
   };
 }
 
@@ -1215,7 +1234,7 @@ function renderKanban() {
   });
   board.innerHTML = Object.entries(grouped).map(([stage, items]) => `
     <div class="kanban-col" data-stage="${escapeHtml(stage)}" 
-         ondragover="event.preventDefault(); event.currentTarget.classList.add('drag-over')"
+         ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move'; event.currentTarget.classList.add('drag-over')"
          ondragleave="event.currentTarget.classList.remove('drag-over')"
          ondrop="handleKanbanDrop(event, '${escapeHtml(stage)}')">
       <h4>${escapeHtml(stage)} <span class="count">${items.length}</span></h4>
@@ -1233,6 +1252,7 @@ function renderKanban() {
 }
 
 function handleDragStart(e, id) {
+  e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', id);
   e.target.classList.add('dragging');
 }
@@ -1456,15 +1476,18 @@ function confirmMerge() {
 
 /* ===== QUICK FOLLOW-UP ===== */
 function quickFollowUp() {
-  const type = currentView === 'customers' ? 'customer' : currentView === 'orders' ? 'order' : 'inquiry';
-  const list = collectionFor(type);
-  if (!list.length) return alert('还没有数据，先新增一条吧');
-  // Show quick picker
-  const names = list.map((item, i) => `${i+1}. ${item.name || item.customerName || item.id}`).join('\n');
-  const idx = prompt(`选择要添加跟进的记录：\n${names}\n\n输入序号：`);
-  if (!idx) return;
-  const item = list[Number(idx) - 1];
-  if (!item) return alert('序号无效');
+  var type = currentView === 'customers' ? 'customer' : currentView === 'orders' ? 'order' : 'inquiry';
+  var list = collectionFor(type);
+  if (!list.length) {
+    openForm(type === 'customer' ? 'customer' : 'inquiry');
+    return;
+  }
+  var names = list.map(function(item, i) { return (i+1) + '. ' + (item.name || item.customerName || item.id); }).join('\n');
+  var idx = prompt('???????????\n' + names + '\n\n?????(??? 0 ??)');
+  if (idx === null) return;
+  if (idx === '0') { openForm(type === 'customer' ? 'customer' : 'inquiry'); return; }
+  var item = list[Number(idx) - 1];
+  if (!item) return alert('????');
   if (type === 'inquiry') openForm('inquiry', item.id);
   else openForm(type, item.id);
 }
@@ -1621,3 +1644,5 @@ document.getElementById('mergeCustomerBtn')?.addEventListener('click', openMerge
 
 // Print PI button
 document.getElementById('printPIBtn')?.addEventListener('click', printPI);
+
+render();
