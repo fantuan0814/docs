@@ -1131,7 +1131,7 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
   });
   if (error) {
     console.error(error);
-    alert("发送失败，请检查 Supabase 邮箱登录设置。");
+    alert(`发送失败：${error.message || "请检查 Supabase 邮箱登录设置"}`);
   } else {
     setCloudStatus("登录链接已发送，请去邮箱点击链接");
     alert("登录链接已发送到邮箱，点击邮件里的链接就能登录。");
