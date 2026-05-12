@@ -1,3 +1,17 @@
+// Polyfill for older browsers
+if (!window.crypto || !window.crypto.randomUUID) {
+  (function() {
+    function _uuid() {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    if (!window.crypto) window.crypto = {};
+    if (!window.crypto.randomUUID) window.crypto.randomUUID = _uuid;
+  })();
+}
+
 const SOURCES = ["FACEBOOK", "国际站", "独立站", "社媒私信", "展会现场", "老客户转介绍"];
 const PRODUCT_CATEGORIES = ["IH电磁饭煲", "保温桶", "电饭煲电脑", "电饭煲机械", "煮粥锅", "电压力锅"];
 const STAGES = ["信息已收集", "已联系未回复", "已回复", "需求确认", "待推荐", "已推荐", "待报价", "已报价", "样品中", "谈判中", "已成交", "暂缓", "无效"];
@@ -12,7 +26,7 @@ const STORAGE_KEY = "cyc-crm-local-v4";
 const PRODUCT_PARAMS = window.PRODUCT_PARAMS || [];
 const SUPABASE_URL = "https://etghiirstnptnpbnnemb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_immE4TvFk9dwoba01_B4sA_xUxR2w57";
-const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = (window.supabase != null ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : undefined);
 let currentUser = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
@@ -76,8 +90,8 @@ let currentView = "dashboard";
 let reminderFilter = "all";
 let editing = { type: null, id: null };
 let detailTarget = null;
-let activeInquiryId = state.inquiries[0]?.id || null;
-let activeOrderId = state.orders[0]?.id || null;
+let activeInquiryId = (state.inquiries[0] != null ? state.inquiries[0].id : undefined) || null;
+let activeOrderId = (state.orders[0] != null ? state.orders[0].id : undefined) || null;
 let undoStack = [];
 let bulkSelected = new Set();
 let sortState = { field: null, dir: 'asc' };
@@ -292,7 +306,7 @@ async function loadCloudData() {
     cloudLoading = false;
     return;
   }
-  if (data?.data) {
+  if ((data != null ? data.data : undefined)) {
     state.customers = data.data.customers || [];
     state.inquiries = data.data.inquiries || [];
     state.orders = data.data.orders || [];
@@ -316,14 +330,14 @@ async function withTimeout(promise, ms = 12000) {
 }
 
 function cloudErrorText(error, action) {
-  const msg = `${error?.message || ""} ${error?.details || ""}`;
-  if (msg.includes("crm_data") || msg.includes("does not exist") || error?.code === "42P01") {
+  const msg = `${(error != null ? error.message : undefined) || ""} ${(error != null ? error.details : undefined) || ""}`;
+  if (msg.includes("crm_data") || msg.includes("does not exist") || (error != null ? error.code : undefined) === "42P01") {
     return `云端${action}失败：请先在 Supabase 跑建表 SQL`;
   }
-  if (msg.includes("permission") || msg.includes("row-level security") || error?.code === "42501") {
+  if (msg.includes("permission") || msg.includes("row-level security") || (error != null ? error.code : undefined) === "42501") {
     return `云端${action}失败：权限策略未生效`;
   }
-  return `云端${action}失败：${error?.message || "未知错误"}`;
+  return `云端${action}失败：${(error != null ? error.message : undefined) || "未知错误"}`;
 }
 
 async function initCloudAuth() {
@@ -332,11 +346,11 @@ async function initCloudAuth() {
     return;
   }
   const { data } = await supabaseClient.auth.getSession();
-  currentUser = data.session?.user || null;
+  currentUser = (data.session != null ? data.session.user : undefined) || null;
   updateAuthUi();
   if (currentUser) await loadCloudData();
   supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-    currentUser = session?.user || null;
+    currentUser = (session != null ? session.user : undefined) || null;
     updateAuthUi();
     if (currentUser) await loadCloudData();
     else setCloudStatus("本地模式");
@@ -344,11 +358,11 @@ async function initCloudAuth() {
 }
 
 function updateAuthUi() {
-  document.getElementById("loginBtn")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("signupBtn")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("emailLoginInput")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("passwordLoginInput")?.classList.toggle("hidden", Boolean(currentUser));
-  document.getElementById("logoutBtn")?.classList.toggle("hidden", !currentUser);
+  (document.getElementById("loginBtn") != null ? document.getElementById("loginBtn").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("signupBtn") != null ? document.getElementById("signupBtn").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
+  (document.getElementById("logoutBtn") != null ? document.getElementById("logoutBtn").classList : undefined).toggle("hidden", !currentUser);
   setCloudStatus(currentUser ? `云端已登录：${currentUser.email || "Google账号"}` : "本地模式");
 }
 
@@ -484,7 +498,7 @@ function getReminders() {
   state.inquiries.forEach((item) => {
     const delta = daysUntil(item.nextFollow);
     if (item.nextFollow && delta <= 3 && !["已成交", "无效"].includes(item.stage)) {
-      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: item.nextFollow, status: item.stage, customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: item.sendContent || latestFollow(item)?.sendContent || item.need || "继续跟进询盘", context: latestFollow(item)?.content || item.notes, delta });
+      reminders.push({ recordType: "inquiry", recordId: item.id, type: "询盘跟进", date: item.nextFollow, status: item.stage, customerName: item.customerName, phone: primaryContact(item), product: text(item.productCategories), action: item.sendContent || (latestFollow(item) != null ? latestFollow(item).sendContent : undefined) || item.need || "继续跟进询盘", context: (latestFollow(item) != null ? latestFollow(item).content : undefined) || item.notes, delta });
     }
   });
   state.orders.forEach((item) => {
@@ -551,10 +565,10 @@ function fillSelect(id, label, options) {
 }
 
 function filteredInquiries() {
-  const q = document.getElementById("inquirySearch")?.value || "";
-  const stage = document.getElementById("inquiryStageFilter")?.value || "";
-  const source = document.getElementById("inquirySourceFilter")?.value || "";
-  const product = document.getElementById("inquiryProductFilter")?.value || "";
+  const q = (document.getElementById("inquirySearch") != null ? document.getElementById("inquirySearch").value : undefined) || "";
+  const stage = (document.getElementById("inquiryStageFilter") != null ? document.getElementById("inquiryStageFilter").value : undefined) || "";
+  const source = (document.getElementById("inquirySourceFilter") != null ? document.getElementById("inquirySourceFilter").value : undefined) || "";
+  const product = (document.getElementById("inquiryProductFilter") != null ? document.getElementById("inquiryProductFilter").value : undefined) || "";
   return state.inquiries.filter((item) => matchesSearch(item, q) && (!stage || item.stage === stage) && (!source || item.source === source) && (!product || (item.productCategories || []).includes(product)));
 }
 
@@ -574,7 +588,7 @@ function renderInquiries() {
   const focus = state.inquiries.find((item) => item.id === activeInquiryId) || rows[0];
   renderInquiryFocus(focus);
   document.getElementById("inquiryList").innerHTML = makeTable(["询盘号", "日期", "客户", "阶段", "国家", "来源", "产品", "需求", "下次跟进", "跟进数", "操作"], rows.map((item) => ({
-    _id: item.id, 0: item.id, 1: item.date, 2: item.customerName, 3: item.stage, 4: item.country, 5: item.source, 6: text(item.productCategories), 7: item.need, 8: item.nextFollow, 9: item.follows?.length || 0, 10: `<div class="row-actions"><button class="row-btn" data-focus-inquiry="${item.id}">查看跟进</button>${actionButtons("inquiry", item.id)}</div>`
+    _id: item.id, 0: item.id, 1: item.date, 2: item.customerName, 3: item.stage, 4: item.country, 5: item.source, 6: text(item.productCategories), 7: item.need, 8: item.nextFollow, 9: (item.follows != null ? item.follows.length : undefined) || 0, 10: `<div class="row-actions"><button class="row-btn" data-focus-inquiry="${item.id}">查看跟进</button>${actionButtons("inquiry", item.id)}</div>`
   })), true, 'inquiry');
 }
 
@@ -671,7 +685,7 @@ function renderFobCalculator() {
 function fillCalcFromProduct(model) {
   if (!model) return;
   const catalog = PRODUCT_CATALOG.find((item) => item.model === model);
-  const capacity = String(model).match(/[\d.]+L/)?.[0] || "";
+  const capacity = String(model).match(/[\d.]+L/)[0] || "";
   const params = PRODUCT_PARAMS.find((item) => item["产品型号"] === model) || PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "") === capacity);
   const set = (key, value) => {
     const el = document.querySelector(`[data-calc="${key}"]`);
@@ -690,7 +704,7 @@ function fillCalcFromProduct(model) {
 }
 
 function cbmFromPacking(value) {
-  const nums = String(value || "").match(/\d+(\.\d+)?/g)?.map(Number);
+  const nums = (String(value || "").match(/\d+(\.\d+)?/g) != null ? String(value || "").match(/\d+(\.\d+)?/g).map(Number) : undefined);
   if (!nums || nums.length < 3) return null;
   return nums[0] / 1000 * (nums[1] / 1000) * (nums[2] / 1000);
 }
@@ -701,10 +715,10 @@ function pcsFromPacking(value) {
 }
 
 function calculateFob() {
-  const value = (key) => Number(document.querySelector(`[data-calc="${key}"]`)?.value || 0);
-  const mode = document.querySelector('[data-calc="quoteMode"]')?.value || "FOB整柜";
-  const containerType = document.querySelector('[data-calc="containerType"]')?.value || "20GP";
-  const factoryTaxType = document.querySelector('[data-calc="factoryTaxType"]')?.value || "含税";
+  const value = (key) => Number((document.querySelector(`[data-calc="${key}"]`) != null ? document.querySelector(`[data-calc="${key}"]`).value : undefined) || 0);
+  const mode = (document.querySelector('[data-calc="quoteMode"]') != null ? document.querySelector('[data-calc="quoteMode"]').value : undefined) || "FOB整柜";
+  const containerType = (document.querySelector('[data-calc="containerType"]') != null ? document.querySelector('[data-calc="containerType"]').value : undefined) || "20GP";
+  const factoryTaxType = (document.querySelector('[data-calc="factoryTaxType"]') != null ? document.querySelector('[data-calc="factoryTaxType"]').value : undefined) || "含税";
   const factoryPrice = value("factoryPrice");
   const pcsPerBox = value("pcsPerBox") || 1;
   const boxCount = value("boxCount") || 1;
@@ -890,8 +904,8 @@ function bindFormHelpers() {
     const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
     if (files.length) { e.preventDefault(); addFiles(files, zone.dataset.imageZone); }
   }));
-  document.getElementById("addContactBtn")?.addEventListener("click", () => document.getElementById("addContactBtn").insertAdjacentHTML("beforebegin", contactRowHtml()));
-  document.getElementById("addOrderItemBtn")?.addEventListener("click", () => document.getElementById("addOrderItemBtn").insertAdjacentHTML("beforebegin", orderItemRowHtml()));
+  (document.getElementById("addContactBtn") != null ? document.getElementById("addContactBtn").addEventListener("click", () => document.getElementById("addContactBtn").insertAdjacentHTML("beforebegin", contactRowHtml())) : undefined);
+  (document.getElementById("addOrderItemBtn") != null ? document.getElementById("addOrderItemBtn").addEventListener("click", () => document.getElementById("addOrderItemBtn").insertAdjacentHTML("beforebegin", orderItemRowHtml())) : undefined);
 }
 
 function bindKindVisibility() {
@@ -978,7 +992,7 @@ function normalizeRecord(type, data) {
     data.stage ||= "新询盘";
     data.phone = primaryContact(data);
     data.email ||= contactByType(data, "邮箱");
-    data.follows = mergeFollow(editing.id ? findRecord("inquiry", editing.id)?.follows : [], data);
+    data.follows = mergeFollow(editing.id ? (findRecord("inquiry", editing.id) != null ? findRecord("inquiry", editing.id).follows : undefined) : [], data);
   }
   if (type === "order") {
     data.piDate = toISO(data.piDateInput) || formatISO(new Date());
@@ -1003,13 +1017,13 @@ function syncInquiryFromCustomer(customer) {
   if (!["已回复", "有询盘", "已报价"].includes(customer.stage)) return;
   const existing = state.inquiries.find((x) => x.customerRef === customer.id);
   const date = customer.firstContact || formatISO(new Date());
-  const inquiry = { ...(existing || {}), customerRef: customer.id, id: existing?.id || makeInquiryId(date), dateInput: customer.firstContactInput, date, customerName: customer.name, customerKind: customer.customerKind, companyName: customer.companyName, personName: customer.personName, position: customer.position, contacts: customer.contacts || [], country: customer.country, nature: customer.nature, source: customer.source, stage: customer.stage === "已报价" ? "已报价" : "已回复", level: customer.level, productCategories: customer.productCategories || [], productModels: customer.productModels || [], need: customer.nextAction, sendContent: customer.nextAction, nextFollowInput: customer.nextFollowInput, nextFollow: customer.nextFollow, notes: customer.notes, chatImages: customer.chatImages || [], profileImages: customer.profileImages || [] };
+  const inquiry = { ...(existing || {}), customerRef: customer.id, id: (existing != null ? existing.id : undefined) || makeInquiryId(date), dateInput: customer.firstContactInput, date, customerName: customer.name, customerKind: customer.customerKind, companyName: customer.companyName, personName: customer.personName, position: customer.position, contacts: customer.contacts || [], country: customer.country, nature: customer.nature, source: customer.source, stage: customer.stage === "已报价" ? "已报价" : "已回复", level: customer.level, productCategories: customer.productCategories || [], productModels: customer.productModels || [], need: customer.nextAction, sendContent: customer.nextAction, nextFollowInput: customer.nextFollowInput, nextFollow: customer.nextFollow, notes: customer.notes, chatImages: customer.chatImages || [], profileImages: customer.profileImages || [] };
   if (existing) Object.assign(existing, inquiry); else state.inquiries.push(inquiry);
 }
 
 function syncCustomerFromInquiry(inquiry) {
   const existing = state.customers.find((x) => samePerson(x, inquiry));
-  const customer = { ...(existing || {}), id: existing?.id || crypto.randomUUID(), name: inquiry.customerName, customerKind: inquiry.customerKind, companyName: inquiry.companyName, personName: inquiry.personName, position: inquiry.position, contacts: inquiry.contacts || existing?.contacts || [], firstContactInput: existing?.firstContactInput || inquiry.dateInput, firstContact: existing?.firstContact || inquiry.date, country: inquiry.country, nature: inquiry.nature, source: inquiry.source, level: inquiry.level, productCategories: inquiry.productCategories || [], productModels: inquiry.productModels || [], nextFollowInput: inquiry.nextFollowInput, nextFollow: inquiry.nextFollow, nextAction: inquiry.sendContent || inquiry.need, notes: inquiry.notes, chatImages: inquiry.chatImages || existing?.chatImages || [], profileImages: inquiry.profileImages || existing?.profileImages || [] };
+  const customer = { ...(existing || {}), id: (existing != null ? existing.id : undefined) || crypto.randomUUID(), name: inquiry.customerName, customerKind: inquiry.customerKind, companyName: inquiry.companyName, personName: inquiry.personName, position: inquiry.position, contacts: inquiry.contacts || (existing != null ? existing.contacts : undefined) || [], firstContactInput: (existing != null ? existing.firstContactInput : undefined) || inquiry.dateInput, firstContact: (existing != null ? existing.firstContact : undefined) || inquiry.date, country: inquiry.country, nature: inquiry.nature, source: inquiry.source, level: inquiry.level, productCategories: inquiry.productCategories || [], productModels: inquiry.productModels || [], nextFollowInput: inquiry.nextFollowInput, nextFollow: inquiry.nextFollow, nextAction: inquiry.sendContent || inquiry.need, notes: inquiry.notes, chatImages: inquiry.chatImages || (existing != null ? existing.chatImages : undefined) || [], profileImages: inquiry.profileImages || (existing != null ? existing.profileImages : undefined) || [] };
   if (existing) Object.assign(existing, customer); else state.customers.push(customer);
   inquiry.customerRef = customer.id;
 }
@@ -1023,7 +1037,7 @@ function primaryContact(item) {
 }
 
 function contactByType(item, type) {
-  return (item.contacts || []).find((x) => x.type === type)?.value || "";
+  return ((item.contacts || []).find((x) => x.type === type) != null ? (item.contacts || []).find((x) => x.type === type).value : undefined) || "";
 }
 
 function latestFollow(item) {
@@ -1053,7 +1067,7 @@ function openDetail(type, id) {
 
 function openProductDetail(model) {
   const compact = PRODUCT_CATALOG.find((item) => item.model === model);
-  const byCapacity = compact ? PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "").includes(String(compact.model).match(/[\d.]+L/)?.[0] || "")) : null;
+  const byCapacity = compact ? PRODUCT_PARAMS.find((item) => String(item["内胆容量"] || "").includes(String(compact.model).match(/[\d.]+L/)[0] || "")) : null;
   const byModel = PRODUCT_PARAMS.find((item) => item["产品型号"] === model);
   const record = byModel || byCapacity;
   detailTarget = null;
@@ -1122,20 +1136,20 @@ function productValueEn(key, value) {
 
 function detailHtml(record) {
   const rows = Object.entries(record).filter(([k]) => !["id", "customerRef", "chatImages", "profileImages", "attachments", "follows", "items"].includes(k)).map(([k, v]) => `<div class="detail-row"><span>${escapeHtml(k)}</span><strong>${escapeHtml(text(v))}</strong></div>`).join("");
-  const follows = record.follows?.length ? `<div class="detail-row wide-detail"><span>跟进时间线</span>${record.follows.map((f) => `<strong>${escapeHtml(f.date)}：${escapeHtml(f.content)} ｜ 要发：${escapeHtml(f.sendContent || "")}</strong>`).join("")}</div>` : "";
+  const follows = (record.follows != null ? record.follows.length : undefined) ? `<div class="detail-row wide-detail"><span>跟进时间线</span>${record.follows.map((f) => `<strong>${escapeHtml(f.date)}：${escapeHtml(f.content)} ｜ 要发：${escapeHtml(f.sendContent || "")}</strong>`).join("")}</div>` : "";
   const chat = (record.chatImages || []).map(imageThumb).join("");
   const profile = (record.profileImages || []).map(imageThumb).join("");
   return `${rows}${follows}<div class="detail-images"><h4>聊天图片</h4>${chat || "<p>没有聊天图片</p>"}</div><div class="detail-images"><h4>资料图片</h4>${profile || "<p>没有资料图片</p>"}</div>`;
 }
 
 function imageCount(item) {
-  const c = item.chatImages?.length || 0;
-  const p = item.profileImages?.length || 0;
+  const c = (item.chatImages != null ? item.chatImages.length : undefined) || 0;
+  const p = (item.profileImages != null ? item.profileImages.length : undefined) || 0;
   return c || p ? `<span class="tag">聊天${c} / 资料${p}</span>` : "";
 }
 
 function contactSummary(item) {
-  return item.contacts?.length ? item.contacts.map((x) => `${x.type}: ${escapeHtml(x.value)}`).join("<br>") : "";
+  return (item.contacts != null ? item.contacts.length : undefined) ? item.contacts.map((x) => `${x.type}: ${escapeHtml(x.value)}`).join("<br>") : "";
 }
 
 function orderProducts(order) {
@@ -1415,8 +1429,8 @@ function sortTable(type, field, rows) {
 
 /* ===== DATE RANGE FILTER ===== */
 function inDateRange(item, field) {
-  const from = document.getElementById('dateFrom')?.value;
-  const to = document.getElementById('dateTo')?.value;
+  const from = (document.getElementById('dateFrom') != null ? document.getElementById('dateFrom').value : undefined);
+  const to = (document.getElementById('dateTo') != null ? document.getElementById('dateTo').value : undefined);
   if (!from && !to) return true;
   const val = item[field];
   if (!val) return !from && !to;
@@ -1522,7 +1536,7 @@ document.getElementById("closeDialogBtn").addEventListener("click", () => docume
 document.getElementById("closeDetailBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailDoneBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailEditBtn").addEventListener("click", () => { if (detailTarget) { document.getElementById("detailDialog").close(); openForm(detailTarget.type, detailTarget.id); } });
-document.getElementById("clearInquiryFilters")?.addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); });
+(document.getElementById("clearInquiryFilters") != null ? document.getElementById("clearInquiryFilters").addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); }) : undefined);
 
 document.body.addEventListener("click", (e) => {
   const removeContact = e.target.closest("[data-remove-contact]");
@@ -1554,10 +1568,10 @@ document.querySelectorAll(".segment").forEach((btn) => btn.addEventListener("cli
 });
 document.getElementById("exportBtn").addEventListener("click", exportData);
 document.getElementById("importInput").addEventListener("change", (e) => importData(e.target.files[0]));
-document.getElementById("loginBtn")?.addEventListener("click", async () => {
+(document.getElementById("loginBtn") != null ? document.getElementById("loginBtn").addEventListener("click", async () => {
   if (!supabaseClient) return alert("Supabase 没有加载成功，请检查网络。");
-  const email = document.getElementById("emailLoginInput")?.value.trim();
-  const password = document.getElementById("passwordLoginInput")?.value;
+  const email = (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").value : undefined).trim();
+  const password = (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").value : undefined);
   if (!email || !password) return alert("请输入邮箱和密码。");
   const { error } = await supabaseClient.auth.signInWithPassword({
     email,
@@ -1569,12 +1583,12 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
   } else {
     setCloudStatus("登录成功，正在加载云端数据...");
   }
-});
+}) : undefined);
 
-document.getElementById("signupBtn")?.addEventListener("click", async () => {
+(document.getElementById("signupBtn") != null ? document.getElementById("signupBtn").addEventListener("click", async () => {
   if (!supabaseClient) return alert("Supabase 没有加载成功，请检查网络。");
-  const email = document.getElementById("emailLoginInput")?.value.trim();
-  const password = document.getElementById("passwordLoginInput")?.value;
+  const email = (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").value : undefined).trim();
+  const password = (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").value : undefined);
   if (!email || !password) return alert("请输入邮箱和密码。");
   if (password.length < 6) return alert("密码至少 6 位。");
   const { error } = await supabaseClient.auth.signUp({
@@ -1587,20 +1601,20 @@ document.getElementById("signupBtn")?.addEventListener("click", async () => {
   } else {
     alert("注册成功。如果 Supabase 要求邮箱确认，请先去邮箱点确认链接；如果没有要求，会自动登录。");
   }
-});
+}) : undefined);
 
 function authErrorText(error) {
-  const msg = error?.message || "";
+  const msg = (error != null ? error.message : undefined) || "";
   if (msg.includes("Invalid login credentials")) return "邮箱或密码不对。";
   if (msg.includes("Email not confirmed")) return "邮箱还没确认，请先去邮箱点确认链接。";
   if (msg.includes("User already registered")) return "这个邮箱已经注册过了，请直接登录。";
   if (msg.includes("Password should be at least")) return "密码太短，至少 6 位。";
   return msg || "未知错误";
 }
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+(document.getElementById("logoutBtn") != null ? document.getElementById("logoutBtn").addEventListener("click", async () => {
   if (!supabaseClient) return;
   await supabaseClient.auth.signOut();
-});
+}) : undefined);
 document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) { e.preventDefault(); undo(); } });
 
 saveState();
@@ -1608,41 +1622,41 @@ render();
 initCloudAuth();
 
 // Theme toggle
-document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+(document.getElementById('themeToggle') != null ? document.getElementById('themeToggle').addEventListener('click', toggleTheme) : undefined);
 
 // Mobile nav
-document.getElementById('mobileNavToggle')?.addEventListener('click', toggleMobileNav);
-document.getElementById('sidebarOverlay')?.addEventListener('click', closeMobileNav);
+(document.getElementById('mobileNavToggle') != null ? document.getElementById('mobileNavToggle').addEventListener('click', toggleMobileNav) : undefined);
+(document.getElementById('sidebarOverlay') != null ? document.getElementById('sidebarOverlay').addEventListener('click', closeMobileNav) : undefined);
 
 // Close mobile nav when clicking a nav button
 document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => { closeMobileNav(); }));
 
 // Bulk operations
-document.getElementById('bulkDeleteBtn')?.addEventListener('click', bulkDelete);
-document.getElementById('bulkStageBtn')?.addEventListener('click', bulkChangeStage);
-document.getElementById('bulkCancelBtn')?.addEventListener('click', clearBulkSelection);
+(document.getElementById('bulkDeleteBtn') != null ? document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDelete) : undefined);
+(document.getElementById('bulkStageBtn') != null ? document.getElementById('bulkStageBtn').addEventListener('click', bulkChangeStage) : undefined);
+(document.getElementById('bulkCancelBtn') != null ? document.getElementById('bulkCancelBtn').addEventListener('click', clearBulkSelection) : undefined);
 
 // Date range filters
-document.getElementById('dateFrom')?.addEventListener('change', render);
-document.getElementById('dateTo')?.addEventListener('change', render);
-document.getElementById('clearDateFilter')?.addEventListener('click', () => {
+(document.getElementById('dateFrom') != null ? document.getElementById('dateFrom').addEventListener('change', render) : undefined);
+(document.getElementById('dateTo') != null ? document.getElementById('dateTo').addEventListener('change', render) : undefined);
+(document.getElementById('clearDateFilter') != null ? document.getElementById('clearDateFilter').addEventListener('click', () => {
   document.getElementById('dateFrom').value = '';
   document.getElementById('dateTo').value = '';
   render();
-});
+}) : undefined);
 
 // Customer merge
-document.getElementById('closeMergeBtn')?.addEventListener('click', () => document.getElementById('mergeDialog').close());
-document.getElementById('cancelMergeBtn')?.addEventListener('click', () => document.getElementById('mergeDialog').close());
-document.getElementById('confirmMergeBtn')?.addEventListener('click', confirmMerge);
+(document.getElementById('closeMergeBtn') != null ? document.getElementById('closeMergeBtn').addEventListener('click', () => document.getElementById('mergeDialog').close()) : undefined);
+(document.getElementById('cancelMergeBtn') != null ? document.getElementById('cancelMergeBtn').addEventListener('click', () => document.getElementById('mergeDialog').close()) : undefined);
+(document.getElementById('confirmMergeBtn') != null ? document.getElementById('confirmMergeBtn').addEventListener('click', confirmMerge) : undefined);
 
 // Quick follow-up
-document.getElementById('quickFollowBtn')?.addEventListener('click', quickFollowUp);
+(document.getElementById('quickFollowBtn') != null ? document.getElementById('quickFollowBtn').addEventListener('click', quickFollowUp) : undefined);
 
 // Merge customer button
-document.getElementById('mergeCustomerBtn')?.addEventListener('click', openMergeDialog);
+(document.getElementById('mergeCustomerBtn') != null ? document.getElementById('mergeCustomerBtn').addEventListener('click', openMergeDialog) : undefined);
 
 // Print PI button
-document.getElementById('printPIBtn')?.addEventListener('click', printPI);
+(document.getElementById('printPIBtn') != null ? document.getElementById('printPIBtn').addEventListener('click', printPI) : undefined);
 
 render();

@@ -1,0 +1,66 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Test</title>
+<link rel="stylesheet" href="./styles.css?v=20260512-fix1" />
+</head>
+<body>
+<aside class="sidebar" id="sidebar">
+  <nav class="nav">
+    <button class="nav-btn active" data-view="dashboard">D</button>
+    <button class="nav-btn" data-view="customers">C</button>
+    <button class="nav-btn" data-view="inquiries">I</button>
+    <button class="nav-btn" data-view="orders">O</button>
+    <button class="nav-btn" data-view="kanban">K</button>
+    <button class="nav-btn" data-view="reports">R</button>
+    <button class="nav-btn" data-view="products">P</button>
+  </nav>
+</aside>
+<main class="app-shell">
+<header class="topbar"><div><h2 id="viewTitle"></h2><p id="viewSubtitle"></p></div>
+<div class="top-actions">
+<button id="themeToggle">T</button>
+<div id="cloudStatus"></div>
+<input id="emailLoginInput" type="email">
+<input id="passwordLoginInput" type="password">
+<button id="loginBtn">Login</button>
+<button id="signupBtn">Signup</button>
+<button id="logoutBtn" class="hidden">Logout</button>
+<button id="quickAddBtn">Add</button>
+</div></header>
+<div id="bulkBar"><span id="bulkCount"></span><button id="bulkDeleteBtn">Del</button><button id="bulkStageBtn">Stage</button><button id="bulkCancelBtn">Cancel</button></div>
+<div id="dateRangeFilter"><input id="dateFrom" type="date"><input id="dateTo" type="date"><button id="clearDateFilter">Clear</button></div>
+<section id="dashboard" class="view active-view">
+<div id="statDue"></div><div id="statCustomers"></div><div id="statInquiries"></div><div id="statOrders"></div>
+<div id="countryChart"></div><div id="productChart"></div>
+</section>
+<section id="customers" class="view"></section>
+<section id="inquiries" class="view"><input id="inquirySearch"><select id="inquiryStageFilter"></select><select id="inquirySourceFilter"></select><select id="inquiryProductFilter"></select><button id="clearInquiryFilters">Clear</button><div id="inquirySummary"></div><div id="inquiryFocus"></div><div id="inquiryList"></div></section>
+<section id="orders" class="view"><input id="orderSearch"><div id="piPreview"></div><div id="orderList"></div></section>
+<section id="products" class="view"><div id="fobCalculator"></div><div id="fobResult"></div><input id="productSearch"><select id="productCategoryFilter"></select><div id="productList"></div></section>
+<section id="kanban" class="view"><div id="kanbanBoard"></div></section>
+<section id="reports" class="view"><div id="reportRevenue"></div><div id="reportMonthOrders"></div><div id="reportConversion"></div><div id="reportRevenueTrend"></div><div id="reportOrderTrend"></div><div id="reportConvTrend"></div><div id="funnelChart"></div><div id="monthlyRevenueChart"></div></section>
+</main>
+<dialog id="formDialog"><form id="recordForm"><button id="cancelBtn">Cancel</button><button id="closeDialogBtn">X</button></form></dialog>
+<dialog id="detailDialog"><button id="closeDetailBtn">X</button><button id="detailDoneBtn">OK</button><button id="detailEditBtn">Edit</button><div id="detailBody"></div></dialog>
+<dialog id="mergeDialog"><button id="closeMergeBtn">X</button><button id="cancelMergeBtn">Cancel</button><button id="confirmMergeBtn">OK</button><div id="mergeSourceList"></div><div id="mergeTargetList"></div></dialog>
+<div id="_dbg" style="position:fixed;top:0;left:0;background:green;color:#fff;padding:4px 8px;z-index:99999;font-size:11px;">Loading...</div>
+<button id="quickFollowBtn">+</button>
+<button id="mergeCustomerBtn">Merge</button>
+<button id="printPIBtn">Print</button>
+<button id="exportBtn">Export</button>
+<input id="importInput" type="file">
+<button class="mobile-nav-toggle" id="mobileNavToggle">M</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<script>
+var _errors = []; window.onerror = function(m,s,l) { _errors.push(m + ' (line ' + l + ')'); document.getElementById('_dbg').style.background = 'red'; document.getElementById('_dbg').innerHTML = _errors.map(function(e){return 'ERROR: '+e}).join('<br>'); };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./product-data.js?v=20260512-fix1"></script>
+<script src="./app.js?v=20260512-fix1"></script>
+<script>
+var c=typeof state!=='undefined'?state.customers.length:'?'; var i=typeof state!=='undefined'?state.inquiries.length:'?'; var o=typeof state!=='undefined'?state.orders.length:'?'; var el=document.getElementById('_dbg'); if(_errors.length===0){ el.style.background='green'; el.innerHTML='OK - C:'+c+' I:'+i+' O:'+o; } else { el.innerHTML='OK - C:'+c+' I:'+i+' O:'+o+'<br>'+el.innerHTML; }
+</script>
+</body>
+</html>
