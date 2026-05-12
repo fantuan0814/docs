@@ -408,8 +408,10 @@ function matchesSearch(item, query) {
 function render() {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active-view"));
   document.getElementById(currentView).classList.add("active-view");
-  
-document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === currentView));
+  // Show/hide date filter for relevant views
+  const df = document.getElementById('dateRangeFilter');
+  if (df) df.style.display = ['customers','inquiries','orders'].includes(currentView) ? 'flex' : 'none';
+  document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === currentView));
   document.getElementById("viewTitle").textContent = viewMeta[currentView][0];
   document.getElementById("viewSubtitle").textContent = viewMeta[currentView][1];
   document.getElementById("quickAddBtn").textContent = viewMeta[currentView][2];
