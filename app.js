@@ -353,7 +353,7 @@ async function initCloudAuth() {
     currentUser = (session != null ? session.user : undefined) || null;
     updateAuthUi();
     if (currentUser) await loadCloudData();
-    else setCloudStatus("本地模式");
+    else setCloudStatus("未登录云端（当前数据只在本地）");
   });
 }
 
@@ -363,7 +363,7 @@ function updateAuthUi() {
   (document.getElementById("emailLoginInput") != null ? document.getElementById("emailLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
   (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").classList : undefined).toggle("hidden", Boolean(currentUser));
   (document.getElementById("logoutBtn") != null ? document.getElementById("logoutBtn").classList : undefined).toggle("hidden", !currentUser);
-  setCloudStatus(currentUser ? `云端已登录：${currentUser.email || "Google账号"}` : "本地模式");
+  setCloudStatus(currentUser ? `云端已登录：${currentUser.email || "账号"}` : "未登录云端（当前数据只在本地）");
 }
 
 function snapshot() {
@@ -1591,15 +1591,21 @@ document.getElementById("importInput").addEventListener("change", (e) => importD
   const password = (document.getElementById("passwordLoginInput") != null ? document.getElementById("passwordLoginInput").value : undefined);
   if (!email || !password) return alert("请输入邮箱和密码。");
   if (password.length < 6) return alert("密码至少 6 位。");
-  const { error } = await supabaseClient.auth.signUp({
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { data, error } = await supabaseClient.auth.signUp({
     email,
     password,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
   });
   if (error) {
     console.error(error);
     alert(`注册失败：${authErrorText(error)}`);
+  } else if (data && data.session) {
+    setCloudStatus("注册成功，正在加载云端数据...");
   } else {
-    alert("注册成功。如果 Supabase 要求邮箱确认，请先去邮箱点确认链接；如果没有要求，会自动登录。");
+    alert("注册已提交，但 Supabase 现在要求邮箱确认，所以还不会显示云端登录。建议在 Supabase 里关闭 Confirm email，或去邮箱点确认链接后再登录。");
   }
 }) : undefined);
 
