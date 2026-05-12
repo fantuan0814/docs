@@ -43,9 +43,11 @@ const PRODUCT_PARAMS = window.PRODUCT_PARAMS || [];
 const SUPABASE_URL = "https://etghiirstnptnpbnnemb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_immE4TvFk9dwoba01_B4sA_xUxR2w57";
 const supabaseClient = (window.supabase != null ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : undefined);
+const CLOUD_TIMEOUT_MS = 45000;
 let currentUser = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
+let cloudLoadedUserId = null;
 const ORDER_DEFAULTS = {
   portLoading: "GUANGZHOU / SHENZHEN, CHINA",
   payment: "100% T/T BEFORE SHIPMENT",
@@ -280,7 +282,7 @@ function scheduleCloudSave() {
 
 async function saveCloudData() {
   if (!supabaseClient || !currentUser) return;
-  setCloudStatus("云端保存中...");
+  setCloudStatus("云端保存中... 图片多时会慢一点");
   const { error, timedOut } = await withTimeout(
     supabaseClient
       .from("crm_data")
@@ -289,10 +291,10 @@ async function saveCloudData() {
         data: cloudPayload(),
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" }),
-    12000
+    CLOUD_TIMEOUT_MS
   );
   if (timedOut) {
-    setCloudStatus("云端保存超时，请检查网络");
+    setCloudStatus("云端保存超时：当前数据仍在本地，稍后会再试");
     return;
   }
   setCloudStatus(error ? cloudErrorText(error, "保存") : "已同步云端");
@@ -301,19 +303,20 @@ async function saveCloudData() {
 
 async function loadCloudData() {
   if (!supabaseClient || !currentUser) return;
+  if (cloudLoading || cloudLoadedUserId === currentUser.id) return;
   cloudLoading = true;
-  setCloudStatus("云端加载中...");
+  setCloudStatus("云端加载中... 图片多时会慢一点");
   const { data, error, timedOut } = await withTimeout(
     supabaseClient
       .from("crm_data")
       .select("data")
       .eq("user_id", currentUser.id)
       .maybeSingle(),
-    12000
+    CLOUD_TIMEOUT_MS
   );
   if (timedOut) {
     cloudLoading = false;
-    setCloudStatus("云端加载超时，请检查网络");
+    setCloudStatus("云端加载超时：先使用本地数据，稍后可刷新重试");
     return;
   }
   if (error) {
@@ -328,14 +331,16 @@ async function loadCloudData() {
     state.orders = data.data.orders || [];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } else {
+    setCloudStatus("云端已登录，正在创建你的云端数据...");
     await saveCloudData();
   }
   cloudLoading = false;
+  cloudLoadedUserId = currentUser.id;
   setCloudStatus(`云端已登录：${currentUser.email || "Google账号"}`);
   render();
 }
 
-async function withTimeout(promise, ms = 12000) {
+async function withTimeout(promise, ms = CLOUD_TIMEOUT_MS) {
   let timer;
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ timedOut: true }), ms);
@@ -369,7 +374,10 @@ async function initCloudAuth() {
     currentUser = (session != null ? session.user : undefined) || null;
     updateAuthUi();
     if (currentUser) await loadCloudData();
-    else setCloudStatus("未登录云端（当前数据只在本地）");
+    else {
+      cloudLoadedUserId = null;
+      setCloudStatus("未登录云端（当前数据只在本地）");
+    }
   });
 }
 
