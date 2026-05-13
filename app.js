@@ -595,10 +595,14 @@ function renderReminders() {
   list.innerHTML = rows.map((item) => {
     const tone = item.delta < 0 ? "red" : item.delta === 0 ? "amber" : "green";
     const label = item.delta < 0 ? `逾期 ${Math.abs(item.delta)} 天` : item.delta === 0 ? "今天" : `${item.delta} 天后`;
+    const meta = [item.phone, item.product].filter(Boolean).map(escapeHtml).join(" · ");
+    const quickActions = item.recordType === "order"
+      ? `<button class="row-btn" data-edit-type="${item.recordType}" data-edit-id="${item.recordId}" type="button">编辑订单</button>`
+      : `<button class="row-btn" data-snooze-type="${item.recordType}" data-snooze-id="${item.recordId}" data-snooze-days="1" type="button">明天跟进</button><button class="row-btn" data-snooze-type="${item.recordType}" data-snooze-id="${item.recordId}" data-snooze-days="3" type="button">3天后跟进</button><button class="row-btn" data-edit-type="${item.recordType}" data-edit-id="${item.recordId}" type="button">编辑跟进</button>`;
     return `<article class="reminder clickable" data-detail-type="${item.recordType}" data-detail-id="${item.recordId}">
       <div><span class="tag ${tone}">${label}</span><p>${item.date}</p>${item.auto ? '<span class="tag soft">自动计划</span>' : ''}</div>
-      <div><h4>${escapeHtml(item.customerName)} · ${escapeHtml(item.type)}</h4><p><strong>建议：</strong>${escapeHtml(item.action)}</p><p><strong>原因：</strong>${escapeHtml(item.context || "")}</p><p>${escapeHtml(item.phone)} · ${escapeHtml(item.product)}</p></div>
-      <div class="reminder-actions"><span class="tag">${escapeHtml(item.status || "")}</span><button class="row-btn" data-edit-type="${item.recordType}" data-edit-id="${item.recordId}" type="button">编辑跟进</button></div>
+      <div><h4>${escapeHtml(item.customerName)} · ${escapeHtml(item.type)}</h4><p><strong>建议：</strong>${escapeHtml(item.action)}</p><p><strong>原因：</strong>${escapeHtml(item.context || "")}</p>${meta ? `<p>${meta}</p>` : ""}</div>
+      <div class="reminder-actions"><span class="tag">${escapeHtml(item.status || "")}</span>${quickActions}</div>
     </article>`;
   }).join("");
 }
@@ -1286,6 +1290,29 @@ function deleteRecord(type, id) {
   render();
 }
 
+function snoozeFollow(type, id, days) {
+  const record = findRecord(type, id);
+  if (!record) return;
+  const nextDate = addDays(formatISO(new Date()), Number(days) || 1);
+  snapshot();
+  record.nextFollow = nextDate;
+  record.nextFollowInput = nextDate;
+  if (type === "inquiry") {
+    record.follows = record.follows || [];
+    record.follows.push({
+      id: crypto.randomUUID(),
+      date: formatISO(new Date()),
+      content: "已处理本次提醒，重新安排下次跟进。",
+      sendContent: record.sendContent || record.nextAction || "",
+      nextFollow: nextDate,
+    });
+    syncCustomerFromInquiry(record);
+  }
+  if (type === "customer") syncInquiryFromCustomer(record);
+  saveState();
+  render();
+}
+
 function exportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
@@ -1653,6 +1680,7 @@ document.body.addEventListener("click", (e) => {
   const detail = e.target.closest("[data-detail-type]");
   const focus = e.target.closest("[data-focus-inquiry]");
   const addFollow = e.target.closest("[data-add-follow]");
+  const snooze = e.target.closest("[data-snooze-type]");
   const preview = e.target.closest("[data-preview-order]");
   const productDetail = e.target.closest("[data-product-detail]");
   const productLang = e.target.closest("[data-product-lang]");
@@ -1662,6 +1690,7 @@ document.body.addEventListener("click", (e) => {
   else if (del) deleteRecord(del.dataset.deleteType, del.dataset.deleteId);
   else if (focus) { activeInquiryId = focus.dataset.focusInquiry; renderInquiries(); }
   else if (addFollow) { const item = findRecord("inquiry", addFollow.dataset.addFollow); openForm("inquiry", item.id); }
+  else if (snooze) snoozeFollow(snooze.dataset.snoozeType, snooze.dataset.snoozeId, snooze.dataset.snoozeDays);
   else if (preview) { activeOrderId = preview.dataset.previewOrder; renderOrders(); }
   else if (productDetail) openProductDetail(productDetail.dataset.productDetail);
   else if (productLang && window.__lastProductDetail) document.getElementById("detailBody").innerHTML = productDetailHtml(window.__lastProductDetail, productLang.dataset.productLang);

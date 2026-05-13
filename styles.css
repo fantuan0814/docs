@@ -588,6 +588,10 @@ textarea:focus {
   justify-items: end;
 }
 
+.reminder-actions .row-btn {
+  width: 100%;
+}
+
 .table-wrap {
   overflow: auto;
   background: var(--panel);
