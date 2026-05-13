@@ -781,6 +781,15 @@ textarea {
   background: var(--panel);
 }
 
+.thumb-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
 .thumb img {
   display: block;
   width: 100%;
@@ -995,6 +1004,33 @@ textarea {
   border: 1px solid #333;
   text-align: center;
   color: #111;
+  background: #fff;
+}
+
+.pi-bank,
+.pi-sign {
+  margin-top: 8px;
+}
+
+.image-viewer {
+  width: min(94vw, 1080px);
+  background: var(--panel);
+}
+
+.image-viewer-body {
+  padding: 12px;
+  max-height: 78vh;
+  overflow: auto;
+  background: #111;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.image-viewer-body img {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
   background: #fff;
 }
 

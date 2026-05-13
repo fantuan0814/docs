@@ -50,12 +50,22 @@ let cloudLoading = false;
 let cloudLoadedUserId = null;
 const ORDER_DEFAULTS = {
   portLoading: "GUANGZHOU / SHENZHEN, CHINA",
-  payment: "100% T/T BEFORE SHIPMENT",
+  payment: "100% ADVANCE",
+  incoterm: "EXW",
   delivery: "AFTER FULL PAYMENT 14 DAYS",
   partialShipment: "NO ALLOWED",
   currency: "USD",
   status: "待开PI",
   payStatus: "未收款",
+};
+const PI_SELLER = {
+  cnName: "川粤智能商厨",
+  enName: "Steamatech (China) Technology Co., Ltd.",
+  address: "Building 6, Shunde Wanyang Mass Innovation Park, Longjiang Town, Shunde District, Foshan, Guangdong, China",
+  bankName: "JPMorgan Chase Bank N.A., Hong Kong Branch",
+  bankAccount: "63004289235",
+  bankAddress: "18/F, 20/F, 22-29/F, Chater House, 8 Connaught Road Central, Hong Kong",
+  swift: "CHASHKHHXXX",
 };
 const CONTAINER_TYPES = {
   "20GP": 28,
@@ -178,10 +188,11 @@ const schemas = {
     ["contacts", "联系方式(可多条)", "contacts"],
     ["portLoading", "PORT OF LOADING", "text", false, null, "QINGDAO,CHINA"],
     ["portDischarge", "PORT OF DISCHARGE", "text", false, null, "MOMBASA,KENYA"],
+    ["incoterm", "INCOTERM", "text", false, null, "EXW"],
     ["orderItems", "订单产品明细", "orderItems"],
     ["freight", "运费", "number"],
     ["currency", "币种", "select", false, CURRENCIES],
-    ["payment", "付款方式", "text", false, null, "100% T/T BEFORE SHIPMENT"],
+    ["payment", "付款方式", "text", false, null, "100% ADVANCE"],
     ["delivery", "交期", "text", false, null, "AFTER FULL PAYMENT 14 DAYS"],
     ["partialShipment", "分批出货", "text", false, null, "NO ALLOWED"],
     ["status", "订单状态", "select", false, ORDER_STATUS],
@@ -883,12 +894,14 @@ function renderPiPreview(order) {
   const total = orderTotal(order);
   const items = orderLineItems(order);
   box.innerHTML = `<div class="pi-paper">
-    <div class="pi-company"><h3>山东富士五金有限公司</h3><h4>SHANDONG FUJI HARDWARE CO.,LTD</h4><p>NO.1208-072 NO.100 LINGOROAD LINYI CITY SHANDONG CHINA</p><p>TEL: 0086-539-7057822 &nbsp;&nbsp; FAX: 0086-539-7058822</p></div>
+    <div class="pi-company"><h3>${PI_SELLER.cnName}</h3><h4>${PI_SELLER.enName}</h4><p>${PI_SELLER.address}</p></div>
     <h2>PROFORMA INVOICE</h2>
-    <div class="pi-grid"><div><b>CUSTOMER:</b><p>${escapeHtml(order.customerInfo || order.customerName)}</p></div><div><b>PI. NO.:</b><p>${escapeHtml(order.piNo || order.id)}</p><b>DATE</b><p>${escapeHtml(order.piDate)}</p></div><div><b>PORT OF LOADING:</b><p>${escapeHtml(order.portLoading || "QINGDAO,CHINA")}</p></div><div><b>PORT OF DISCHARGE:</b><p>${escapeHtml(order.portDischarge || "")}</p></div></div>
-    <table class="pi-table"><thead><tr><th>SR. NO.</th><th>DESCRIPTION OF GOODS AND PACKAGE</th><th>SIZE</th><th>QUANTITY</th><th>WEIGHT KGS</th><th>UNIT PRICE USD/KG</th><th>AMOUNT (USD)</th></tr></thead><tbody>${items.map((it, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.size)}</td><td>${escapeHtml(it.qty)}</td><td>${escapeHtml(it.weight)}</td><td>${escapeHtml(it.unitPrice)}</td><td>${money(lineAmount(it), "")}</td></tr>`).join("")}<tr><td></td><td></td><td>TOTAL:</td><td>${sum(items, "qty")}</td><td>${sum(items, "weight")}</td><td></td><td>${money(total, "")}</td></tr></tbody></table>
-    <p><b>TOTAL U.S.DOLLARS:</b> ${money(total, order.currency || "USD")}</p><p><b>TERMS OF PAYMENT:</b>${escapeHtml(order.payment || "")}</p><p><b>DELIVERY TIME:</b> ${escapeHtml(order.delivery || "")}</p><p><b>PARTIAL SHIPMENT:</b>${escapeHtml(order.partialShipment || "")}</p>
-    <p><b>BANK INFORMATION:</b></p><p>BENEFICIARY: <b>SHANDONG FUJI HARDWARE CO., LTD.</b></p><p>ACCOUNT NO.: <b>1610010619200260888</b></p><p>BANK NAME: INDUSTRIAL AND COMMERCIAL BANK OF CHINA, LINYI JINGKAI SUB-BRANCH</p><p>SWIFT CODE：<b>ICBKCNBJXXX</b></p>
+    <div class="pi-grid"><div><b>BUYER:</b><p>${escapeHtml(order.customerName)}</p><b>ADDRESS:</b><p>${escapeHtml(order.customerInfo || "")}</p></div><div><b>DATE:</b><p>${escapeHtml(order.piDate)}</p><b>INVOICE NO:</b><p>${escapeHtml(order.piNo || order.id)}</p><b>PAYMENT:</b><p>${escapeHtml(order.payment || ORDER_DEFAULTS.payment)}</p></div><div><b>INCOTERM:</b><p>${escapeHtml(order.incoterm || ORDER_DEFAULTS.incoterm)}</p></div><div><b>SHIPMENT:</b><p>${escapeHtml(order.portLoading || "")}${order.portDischarge ? ` TO ${escapeHtml(order.portDischarge)}` : ""}</p></div><div><b>SELLER ADDRESS:</b><p>${PI_SELLER.address}</p></div><div><b>CURRENCY:</b><p>${escapeHtml(order.currency || "USD")}</p></div></div>
+    <table class="pi-table"><thead><tr><th>ITEM</th><th>Packing Size(mm)</th><th>Gross Weight</th><th>PHOTO</th><th>MODEL NO.</th><th>QTY</th><th>UNIT PRICE</th><th>TOTAL</th></tr></thead><tbody>${items.map((it) => `<tr><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.size)}</td><td>${escapeHtml(it.weight ? `${it.weight} KGS` : "")}</td><td></td><td>${escapeHtml(it.model || it.description)}</td><td>${escapeHtml(it.qty)}</td><td>${escapeHtml(it.unitPrice)}</td><td>${money(lineAmount(it), "")}</td></tr>`).join("")}<tr><td colspan="5"><b>ORDER VALUE</b></td><td>${sum(items, "qty")}</td><td></td><td>${money(total - Number(order.freight || 0), "")}</td></tr><tr><td colspan="7"><b>FREIGHT</b></td><td>${money(Number(order.freight || 0), "")}</td></tr><tr><td colspan="7"><b>TOTAL AMOUNT</b></td><td>${money(total, "")}</td></tr></tbody></table>
+    <p><b>SAY USD:</b> ${money(total, order.currency || "USD")}</p>
+    <p><b>DELIVERY TIME:</b> ${escapeHtml(order.delivery || "")}</p><p><b>PARTIAL SHIPMENT:</b> ${escapeHtml(order.partialShipment || "")}</p>
+    <div class="pi-bank"><p><b>PAYMENT ACCOUNT</b></p><p>Beneficiary's Bank: <b>${PI_SELLER.bankName}</b></p><p>Bank Account: <b>${PI_SELLER.bankAccount}</b></p><p>Bank Address: ${PI_SELLER.bankAddress}</p><p>SWIFT Code: <b>${PI_SELLER.swift}</b></p><p>Beneficiary's Name: <b>${PI_SELLER.enName}</b></p><p>Beneficiary's Address: ${PI_SELLER.address}</p></div>
+    <div class="pi-sign"><p>For Seller:</p><p>${PI_SELLER.enName}</p><p>Authorized Signature:</p><p>${PI_SELLER.enName}</p></div>
   </div>`;
 }
 
@@ -990,7 +1003,9 @@ function attachmentFieldHtml(record = {}) {
 }
 
 function imageThumb(item) {
-  return `<figure class="thumb"><img src="${item.dataUrl}" alt="${escapeHtml(item.name || "图片")}"><figcaption>${escapeHtml(item.name || "截图")}</figcaption></figure>`;
+  const name = escapeHtml(item.name || "截图");
+  const src = escapeHtml(item.dataUrl || "");
+  return `<figure class="thumb"><button class="thumb-button" data-image-view="${src}" data-image-name="${name}" type="button" title="点击放大查看"><img src="${src}" alt="${name}"></button><figcaption>${name}</figcaption></figure>`;
 }
 
 function bindFormHelpers() {
@@ -1030,7 +1045,7 @@ function addFiles(files, kind) {
       fig.dataset.imageKind = kind;
       fig.dataset.name = file.name || "截图";
       fig.dataset.dataUrl = reader.result;
-      fig.innerHTML = `<img src="${reader.result}" alt=""><figcaption>${escapeHtml(file.name || "截图")}</figcaption>`;
+      fig.innerHTML = imageThumb({ name: file.name || "截图", dataUrl: reader.result }).replace('<figure class="thumb">', '').replace('</figure>', '');
       preview.appendChild(fig);
     };
     reader.readAsDataURL(file);
@@ -1107,6 +1122,7 @@ function normalizeRecord(type, data) {
     data.orderItems = data.items;
     data.portLoading ||= ORDER_DEFAULTS.portLoading;
     data.payment ||= ORDER_DEFAULTS.payment;
+    data.incoterm ||= ORDER_DEFAULTS.incoterm;
     data.delivery ||= ORDER_DEFAULTS.delivery;
     data.partialShipment ||= ORDER_DEFAULTS.partialShipment;
     data.currency ||= ORDER_DEFAULTS.currency;
@@ -1187,6 +1203,17 @@ function openProductDetail(model) {
     document.getElementById("detailBody").innerHTML = productDetailHtml(record, "cn");
   }
   document.getElementById("detailDialog").showModal();
+}
+
+function openImageViewer(src, name = "图片") {
+  const dialog = document.getElementById("imageDialog");
+  const img = document.getElementById("imageDialogImg");
+  const title = document.getElementById("imageDialogTitle");
+  if (!dialog || !img) return;
+  title.textContent = name || "图片";
+  img.src = src;
+  img.alt = name || "图片";
+  dialog.showModal();
 }
 
 function productDetailHtml(record, lang = "cn") {
@@ -1684,6 +1711,8 @@ document.getElementById("closeDialogBtn").addEventListener("click", () => docume
 document.getElementById("closeDetailBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailDoneBtn").addEventListener("click", () => document.getElementById("detailDialog").close());
 document.getElementById("detailEditBtn").addEventListener("click", () => { if (detailTarget) { document.getElementById("detailDialog").close(); openForm(detailTarget.type, detailTarget.id); } });
+(document.getElementById("closeImageDialogBtn") != null ? document.getElementById("closeImageDialogBtn").addEventListener("click", () => document.getElementById("imageDialog").close()) : undefined);
+(document.getElementById("imageDialogDoneBtn") != null ? document.getElementById("imageDialogDoneBtn").addEventListener("click", () => document.getElementById("imageDialog").close()) : undefined);
 (document.getElementById("clearInquiryFilters") != null ? document.getElementById("clearInquiryFilters").addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); }) : undefined);
 
 document.body.addEventListener("click", (e) => {
@@ -1695,6 +1724,7 @@ document.body.addEventListener("click", (e) => {
   const focus = e.target.closest("[data-focus-inquiry]");
   const addFollow = e.target.closest("[data-add-follow]");
   const snooze = e.target.closest("[data-snooze-type]");
+  const imageView = e.target.closest("[data-image-view]");
   const preview = e.target.closest("[data-preview-order]");
   const productDetail = e.target.closest("[data-product-detail]");
   const productLang = e.target.closest("[data-product-lang]");
@@ -1705,6 +1735,7 @@ document.body.addEventListener("click", (e) => {
   else if (focus) { activeInquiryId = focus.dataset.focusInquiry; renderInquiries(); }
   else if (addFollow) { const item = findRecord("inquiry", addFollow.dataset.addFollow); openForm("inquiry", item.id); }
   else if (snooze) snoozeFollow(snooze.dataset.snoozeType, snooze.dataset.snoozeId, snooze.dataset.snoozeDays);
+  else if (imageView) openImageViewer(imageView.dataset.imageView, imageView.dataset.imageName);
   else if (preview) { activeOrderId = preview.dataset.previewOrder; renderOrders(); }
   else if (productDetail) openProductDetail(productDetail.dataset.productDetail);
   else if (productLang && window.__lastProductDetail) document.getElementById("detailBody").innerHTML = productDetailHtml(window.__lastProductDetail, productLang.dataset.productLang);
