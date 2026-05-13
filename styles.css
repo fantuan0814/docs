@@ -1344,11 +1344,31 @@ th.sortable.desc::after { content: ' ↓'; opacity: 1; }
     z-index: 140;
   }
   .sidebar-overlay.open { display: block; }
-  .app-shell { padding: 12px 8px 80px; }
+  .app-shell { padding: 14px 8px 80px; }
   .topbar h2 { font-size: 18px; }
-  .topbar { flex-direction: column; gap: 8px; }
-  .top-actions { justify-content: flex-start; flex-wrap: wrap; }
-  .login-input { width: 110px; }
+  .topbar { flex-direction: column; gap: 10px; }
+  .topbar > div:first-child {
+    min-height: 42px;
+    padding-left: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .top-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+  }
+  .cloud-status {
+    grid-column: 2 / -1;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .login-input { width: 100%; }
+  #emailLoginInput { grid-column: 1 / 3; }
+  #passwordLoginInput { grid-column: 3 / 5; }
+  #quickAddBtn { grid-column: 4 / 6; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .charts-grid { grid-template-columns: 1fr; }
   .report-grid { grid-template-columns: 1fr; }
@@ -1379,7 +1399,11 @@ th.sortable.desc::after { content: ' ↓'; opacity: 1; }
 }
 
 @media (max-width: 480px) {
-  .top-actions { gap: 4px; }
+  .top-actions { gap: 5px; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .cloud-status { grid-column: 2 / -1; }
+  #emailLoginInput { grid-column: 1 / 3; }
+  #passwordLoginInput { grid-column: 3 / -1; }
+  #quickAddBtn { grid-column: 3 / -1; }
   .top-actions .ghost-btn, .top-actions .primary-btn { padding: 6px 8px; font-size: 11px; min-height: 28px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 4px; }
   .stat { padding: 8px; }
