@@ -881,11 +881,12 @@ function renderPiPreview(order) {
   if (!box) return;
   if (!order) return box.innerHTML = `<div class="empty">新建订单后，这里会预览 PI。</div>`;
   const total = orderTotal(order);
+  const items = orderLineItems(order);
   box.innerHTML = `<div class="pi-paper">
     <div class="pi-company"><h3>山东富士五金有限公司</h3><h4>SHANDONG FUJI HARDWARE CO.,LTD</h4><p>NO.1208-072 NO.100 LINGOROAD LINYI CITY SHANDONG CHINA</p><p>TEL: 0086-539-7057822 &nbsp;&nbsp; FAX: 0086-539-7058822</p></div>
     <h2>PROFORMA INVOICE</h2>
     <div class="pi-grid"><div><b>CUSTOMER:</b><p>${escapeHtml(order.customerInfo || order.customerName)}</p></div><div><b>PI. NO.:</b><p>${escapeHtml(order.piNo || order.id)}</p><b>DATE</b><p>${escapeHtml(order.piDate)}</p></div><div><b>PORT OF LOADING:</b><p>${escapeHtml(order.portLoading || "QINGDAO,CHINA")}</p></div><div><b>PORT OF DISCHARGE:</b><p>${escapeHtml(order.portDischarge || "")}</p></div></div>
-    <table class="pi-table"><thead><tr><th>SR. NO.</th><th>DESCRIPTION OF GOODS AND PACKAGE</th><th>SIZE</th><th>QUANTITY</th><th>WEIGHT KGS</th><th>UNIT PRICE USD/KG</th><th>AMOUNT (USD)</th></tr></thead><tbody>${(order.items || []).map((it, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.size)}</td><td>${escapeHtml(it.qty)}</td><td>${escapeHtml(it.weight)}</td><td>${escapeHtml(it.unitPrice)}</td><td>${money(lineAmount(it), "")}</td></tr>`).join("")}<tr><td></td><td></td><td>TOTAL:</td><td>${sum(order.items, "qty")}</td><td>${sum(order.items, "weight")}</td><td></td><td>${money(total, "")}</td></tr></tbody></table>
+    <table class="pi-table"><thead><tr><th>SR. NO.</th><th>DESCRIPTION OF GOODS AND PACKAGE</th><th>SIZE</th><th>QUANTITY</th><th>WEIGHT KGS</th><th>UNIT PRICE USD/KG</th><th>AMOUNT (USD)</th></tr></thead><tbody>${items.map((it, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.size)}</td><td>${escapeHtml(it.qty)}</td><td>${escapeHtml(it.weight)}</td><td>${escapeHtml(it.unitPrice)}</td><td>${money(lineAmount(it), "")}</td></tr>`).join("")}<tr><td></td><td></td><td>TOTAL:</td><td>${sum(items, "qty")}</td><td>${sum(items, "weight")}</td><td></td><td>${money(total, "")}</td></tr></tbody></table>
     <p><b>TOTAL U.S.DOLLARS:</b> ${money(total, order.currency || "USD")}</p><p><b>TERMS OF PAYMENT:</b>${escapeHtml(order.payment || "")}</p><p><b>DELIVERY TIME:</b> ${escapeHtml(order.delivery || "")}</p><p><b>PARTIAL SHIPMENT:</b>${escapeHtml(order.partialShipment || "")}</p>
     <p><b>BANK INFORMATION:</b></p><p>BENEFICIARY: <b>SHANDONG FUJI HARDWARE CO., LTD.</b></p><p>ACCOUNT NO.: <b>1610010619200260888</b></p><p>BANK NAME: INDUSTRIAL AND COMMERCIAL BANK OF CHINA, LINYI JINGKAI SUB-BRANCH</p><p>SWIFT CODE：<b>ICBKCNBJXXX</b></p>
   </div>`;
@@ -953,7 +954,7 @@ function openForm(type, id = null, seed = {}) {
 }
 
 function fieldHtml([key, label, kind, required, options, placeholder, className], record = {}) {
-  const value = record[key] ?? (kind === "multi" ? [] : kind === "orderItems" ? [] : "");
+  const value = record[key] ?? (kind === "orderItems" ? (record.items || []) : kind === "multi" ? [] : "");
   const req = required ? "required" : "";
   const cls = className ? ` ${className}` : "";
   if (kind === "textarea") return `<div class="field wide${cls}"><label>${label}</label><textarea name="${key}" placeholder="${escapeHtml(placeholder || "")}">${escapeHtml(value)}</textarea></div>`;
@@ -1103,6 +1104,7 @@ function normalizeRecord(type, data) {
   if (type === "order") {
     data.piDate = toISO(data.piDateInput) || formatISO(new Date());
     data.deliveryDate = toISO(data.deliveryInput);
+    data.orderItems = data.items;
     data.portLoading ||= ORDER_DEFAULTS.portLoading;
     data.payment ||= ORDER_DEFAULTS.payment;
     data.delivery ||= ORDER_DEFAULTS.delivery;
@@ -1260,15 +1262,27 @@ function contactSummary(item) {
 }
 
 function orderProducts(order) {
-  return (order.items || []).map((x) => x.description).filter(Boolean).join("、");
+  return orderLineItems(order).map((x) => x.description || x.model).filter(Boolean).join("、");
 }
 
 function lineAmount(item) {
-  return Number(item.qty || 0) * Number(item.unitPrice || 0);
+  return Number(item.qty || 0) * Number(item.unitPrice ?? item.price ?? 0);
 }
 
 function orderTotal(order) {
-  return (order.items || []).reduce((sum, item) => sum + lineAmount(item), 0) + Number(order.freight || 0);
+  return orderLineItems(order).reduce((sum, item) => sum + lineAmount(item), 0) + Number(order.freight || 0);
+}
+
+function orderLineItems(order = {}) {
+  const rows = (order.items && order.items.length ? order.items : order.orderItems) || [];
+  return rows.map((item) => ({
+    ...item,
+    description: item.description || item.model || "",
+    size: item.size || "",
+    qty: Number(item.qty || 0),
+    weight: Number(item.weight || 0),
+    unitPrice: Number(item.unitPrice ?? item.price ?? 0),
+  }));
 }
 
 function sum(items = [], key) {
