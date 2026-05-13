@@ -59,7 +59,7 @@ const ORDER_DEFAULTS = {
   payStatus: "未收款",
 };
 const PI_SELLER = {
-  cnName: "川粤智能商厨",
+  cnName: "佛山市川粤智能商厨有限公司",
   enName: "Steamatech (China) Technology Co., Ltd.",
   address: "Building 6, Shunde Wanyang Mass Innovation Park, Longjiang Town, Shunde District, Foshan, Guangdong, China",
   bankName: "JPMorgan Chase Bank N.A., Hong Kong Branch",
@@ -114,6 +114,7 @@ function p(category, model, spec, crossBorder, overseas, wholesale, terminal, fl
 }
 
 const state = loadState();
+normalizeState(state);
 let currentView = "dashboard";
 let reminderFilter = "all";
 let editing = { type: null, id: null };
@@ -219,7 +220,7 @@ function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      return normalizeState(JSON.parse(saved));
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -227,7 +228,8 @@ function loadState() {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return {
+  return normalizeState({
+    companyProfile: defaultCompanyProfile(),
     customers: [{
       id: crypto.randomUUID(),
       name: "示例客户A",
@@ -263,7 +265,22 @@ function loadState() {
       { id: 'ORD-20260510-001', piDate: '2026-05-10', piNo: 'FJ26160', customerName: 'Euro Kitchen BV', customerInfo: 'Euro Kitchen BV\nDamrak 12, 1012 LG Amsterdam, Netherlands', contacts: [{type:'邮箱',value:'order@eurokitchen.nl'}], portLoading: 'SHENZHEN, CHINA', portDischarge: 'ROTTERDAM, NETHERLANDS', orderItems: [{model:'21L IH',qty:300,price:7600,amount:2280000}], freight: 4200, container: '1x40HQ', currency: 'CNY', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'NETHERLANDS', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-15', status: '待出货', payStatus: '已收全款', notes: 'IH高端产品，欧洲市场需求增长', chatImages: [], profileImages: [] },
       { id: 'ORD-20260512-001', piDate: '2026-05-12', piNo: 'FJ26162', customerName: '示例客户A', customerInfo: '示例客户A\nNew York, USA', contacts: [{type:'邮箱',value:'tom@example.com'}], portLoading: 'GUANGZHOU, CHINA', portDischarge: 'NEW YORK, USA', orderItems: [{model:'21L电饭煲电脑',qty:200,price:565.80,amount:113160}], freight: 3200, container: '1x40GP', currency: 'USD', delivery: 'AFTER FULL PAYMENT 14 DAYS', destination: 'USA', partialShipment: 'NO ALLOWED', deliveryDate: '2026-06-20', status: '待开PI', payStatus: '未收款', notes: '首批试单', chatImages: [], profileImages: [] },
     ],
-  };
+  });
+}
+
+function defaultCompanyProfile() {
+  return { ...PI_SELLER };
+}
+
+function normalizeState(target) {
+  target.customers ||= [];
+  target.inquiries ||= [];
+  target.orders ||= [];
+  target.companyProfile = { ...defaultCompanyProfile(), ...(target.companyProfile || {}) };
+  if (target.companyProfile.cnName === "川粤智能商厨") {
+    target.companyProfile.cnName = defaultCompanyProfile().cnName;
+  }
+  return target;
 }
 
 function saveState() {
@@ -276,6 +293,7 @@ function cloudPayload() {
     customers: state.customers,
     inquiries: state.inquiries,
     orders: state.orders,
+    companyProfile: state.companyProfile,
     savedAt: new Date().toISOString(),
   };
 }
@@ -340,6 +358,8 @@ async function loadCloudData() {
     state.customers = data.data.customers || [];
     state.inquiries = data.data.inquiries || [];
     state.orders = data.data.orders || [];
+    state.companyProfile = { ...defaultCompanyProfile(), ...(data.data.companyProfile || {}) };
+    normalizeState(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } else {
     setCloudStatus("云端已登录，正在创建你的云端数据...");
@@ -893,15 +913,16 @@ function renderPiPreview(order) {
   if (!order) return box.innerHTML = `<div class="empty">新建订单后，这里会预览 PI。</div>`;
   const total = orderTotal(order);
   const items = orderLineItems(order);
+  const seller = state.companyProfile || defaultCompanyProfile();
   box.innerHTML = `<div class="pi-paper">
-    <div class="pi-company"><h3>${PI_SELLER.cnName}</h3><h4>${PI_SELLER.enName}</h4><p>${PI_SELLER.address}</p></div>
+    <div class="pi-company"><h3>${escapeHtml(seller.cnName)}</h3><h4>${escapeHtml(seller.enName)}</h4><p>${escapeHtml(seller.address)}</p></div>
     <h2>PROFORMA INVOICE</h2>
-    <div class="pi-grid"><div><b>BUYER:</b><p>${escapeHtml(order.customerName)}</p><b>ADDRESS:</b><p>${escapeHtml(order.customerInfo || "")}</p></div><div><b>DATE:</b><p>${escapeHtml(order.piDate)}</p><b>INVOICE NO:</b><p>${escapeHtml(order.piNo || order.id)}</p><b>PAYMENT:</b><p>${escapeHtml(order.payment || ORDER_DEFAULTS.payment)}</p></div><div><b>INCOTERM:</b><p>${escapeHtml(order.incoterm || ORDER_DEFAULTS.incoterm)}</p></div><div><b>SHIPMENT:</b><p>${escapeHtml(order.portLoading || "")}${order.portDischarge ? ` TO ${escapeHtml(order.portDischarge)}` : ""}</p></div><div><b>SELLER ADDRESS:</b><p>${PI_SELLER.address}</p></div><div><b>CURRENCY:</b><p>${escapeHtml(order.currency || "USD")}</p></div></div>
+    <div class="pi-grid"><div><b>BUYER:</b><p>${escapeHtml(order.customerName)}</p><b>ADDRESS:</b><p>${escapeHtml(order.customerInfo || "")}</p></div><div><b>DATE:</b><p>${escapeHtml(order.piDate)}</p><b>INVOICE NO:</b><p>${escapeHtml(order.piNo || order.id)}</p><b>PAYMENT:</b><p>${escapeHtml(order.payment || ORDER_DEFAULTS.payment)}</p></div><div><b>INCOTERM:</b><p>${escapeHtml(order.incoterm || ORDER_DEFAULTS.incoterm)}</p></div><div><b>SHIPMENT:</b><p>${escapeHtml(order.portLoading || "")}${order.portDischarge ? ` TO ${escapeHtml(order.portDischarge)}` : ""}</p></div><div><b>SELLER ADDRESS:</b><p>${escapeHtml(seller.address)}</p></div><div><b>CURRENCY:</b><p>${escapeHtml(order.currency || "USD")}</p></div></div>
     <table class="pi-table"><thead><tr><th>ITEM</th><th>Packing Size(mm)</th><th>Gross Weight</th><th>PHOTO</th><th>MODEL NO.</th><th>QTY</th><th>UNIT PRICE</th><th>TOTAL</th></tr></thead><tbody>${items.map((it) => `<tr><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.size)}</td><td>${escapeHtml(it.weight ? `${it.weight} KGS` : "")}</td><td></td><td>${escapeHtml(it.model || it.description)}</td><td>${escapeHtml(it.qty)}</td><td>${escapeHtml(it.unitPrice)}</td><td>${money(lineAmount(it), "")}</td></tr>`).join("")}<tr><td colspan="5"><b>ORDER VALUE</b></td><td>${sum(items, "qty")}</td><td></td><td>${money(total - Number(order.freight || 0), "")}</td></tr><tr><td colspan="7"><b>FREIGHT</b></td><td>${money(Number(order.freight || 0), "")}</td></tr><tr><td colspan="7"><b>TOTAL AMOUNT</b></td><td>${money(total, "")}</td></tr></tbody></table>
     <p><b>SAY USD:</b> ${money(total, order.currency || "USD")}</p>
     <p><b>DELIVERY TIME:</b> ${escapeHtml(order.delivery || "")}</p><p><b>PARTIAL SHIPMENT:</b> ${escapeHtml(order.partialShipment || "")}</p>
-    <div class="pi-bank"><p><b>PAYMENT ACCOUNT</b></p><p>Beneficiary's Bank: <b>${PI_SELLER.bankName}</b></p><p>Bank Account: <b>${PI_SELLER.bankAccount}</b></p><p>Bank Address: ${PI_SELLER.bankAddress}</p><p>SWIFT Code: <b>${PI_SELLER.swift}</b></p><p>Beneficiary's Name: <b>${PI_SELLER.enName}</b></p><p>Beneficiary's Address: ${PI_SELLER.address}</p></div>
-    <div class="pi-sign"><p>For Seller:</p><p>${PI_SELLER.enName}</p><p>Authorized Signature:</p><p>${PI_SELLER.enName}</p></div>
+    <div class="pi-bank"><p><b>PAYMENT ACCOUNT</b></p><p>Beneficiary's Bank: <b>${escapeHtml(seller.bankName)}</b></p><p>Bank Account: <b>${escapeHtml(seller.bankAccount)}</b></p><p>Bank Address: ${escapeHtml(seller.bankAddress)}</p><p>SWIFT Code: <b>${escapeHtml(seller.swift)}</b></p><p>Beneficiary's Name: <b>${escapeHtml(seller.enName)}</b></p><p>Beneficiary's Address: ${escapeHtml(seller.address)}</p></div>
+    <div class="pi-sign"><p>For Seller:</p><p>${escapeHtml(seller.enName)}</p><p>Authorized Signature:</p><p>${escapeHtml(seller.enName)}</p></div>
   </div>`;
 }
 
@@ -1214,6 +1235,40 @@ function openImageViewer(src, name = "图片") {
   img.src = src;
   img.alt = name || "图片";
   dialog.showModal();
+}
+
+function openCompanyDialog() {
+  const profile = state.companyProfile || defaultCompanyProfile();
+  const fields = [
+    ["cnName", "中文公司名"],
+    ["enName", "英文公司名"],
+    ["address", "公司地址"],
+    ["bankName", "收款银行"],
+    ["bankAccount", "银行账号"],
+    ["bankAddress", "银行地址"],
+    ["swift", "SWIFT Code"],
+  ];
+  document.getElementById("companyFields").innerHTML = fields.map(([key, label]) => {
+    const value = escapeHtml(profile[key] || "");
+    const field = key === "address" || key === "bankAddress"
+      ? `<textarea name="${key}">${value}</textarea>`
+      : `<input name="${key}" value="${value}">`;
+    return `<div class="field ${key === "address" || key === "bankAddress" ? "wide" : ""}"><label>${label}</label>${field}</div>`;
+  }).join("");
+  document.getElementById("companyDialog").showModal();
+}
+
+function saveCompanyProfile(e) {
+  e.preventDefault();
+  snapshot();
+  const form = new FormData(e.target);
+  state.companyProfile = { ...defaultCompanyProfile() };
+  for (const key of ["cnName", "enName", "address", "bankName", "bankAccount", "bankAddress", "swift"]) {
+    state.companyProfile[key] = String(form.get(key) || "").trim();
+  }
+  saveState();
+  document.getElementById("companyDialog").close();
+  render();
 }
 
 function productDetailHtml(record, lang = "cn") {
@@ -1713,6 +1768,10 @@ document.getElementById("detailDoneBtn").addEventListener("click", () => documen
 document.getElementById("detailEditBtn").addEventListener("click", () => { if (detailTarget) { document.getElementById("detailDialog").close(); openForm(detailTarget.type, detailTarget.id); } });
 (document.getElementById("closeImageDialogBtn") != null ? document.getElementById("closeImageDialogBtn").addEventListener("click", () => document.getElementById("imageDialog").close()) : undefined);
 (document.getElementById("imageDialogDoneBtn") != null ? document.getElementById("imageDialogDoneBtn").addEventListener("click", () => document.getElementById("imageDialog").close()) : undefined);
+(document.getElementById("companySettingsBtn") != null ? document.getElementById("companySettingsBtn").addEventListener("click", openCompanyDialog) : undefined);
+(document.getElementById("companyForm") != null ? document.getElementById("companyForm").addEventListener("submit", saveCompanyProfile) : undefined);
+(document.getElementById("closeCompanyDialogBtn") != null ? document.getElementById("closeCompanyDialogBtn").addEventListener("click", () => document.getElementById("companyDialog").close()) : undefined);
+(document.getElementById("cancelCompanyBtn") != null ? document.getElementById("cancelCompanyBtn").addEventListener("click", () => document.getElementById("companyDialog").close()) : undefined);
 (document.getElementById("clearInquiryFilters") != null ? document.getElementById("clearInquiryFilters").addEventListener("click", () => { ["inquiryStageFilter", "inquirySourceFilter", "inquiryProductFilter", "inquirySearch"].forEach((id) => document.getElementById(id).value = ""); render(); }) : undefined);
 
 document.body.addEventListener("click", (e) => {
